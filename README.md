@@ -40,7 +40,7 @@ pnpm build
 ## 作为 HTTP 服务运行(供前端调用)
 
 ```bash
-# 启动服务(默认端口 3000,可用 PORT 环境变量覆盖)
+# 启动服务(默认端口 3001,可用 PORT 环境变量覆盖)
 pnpm server
 
 # 文件变更自动重启
@@ -66,7 +66,7 @@ pnpm server:dev
 前端调用示例:
 
 ```ts
-const res = await fetch('http://localhost:3000/api/chat', {
+const res = await fetch('http://localhost:3001/api/chat', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ sessionId: 'user-001', message: '查一下本月销售额' }),

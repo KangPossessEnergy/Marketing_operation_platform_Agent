@@ -13,7 +13,7 @@ const sessions = new Map<string, ModelMessage[]>();
 
 function setCors(res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -37,6 +37,12 @@ const server = createServer(async (req, res) => {
   }
 
   const path = req.url?.split("?")[0];
+
+  if (req.method === "GET" && path === "/api/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
 
   if (req.method === "POST" && path === "/api/chat") {
     let payload: { sessionId?: string; message?: string; reset?: boolean };
