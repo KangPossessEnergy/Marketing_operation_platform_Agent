@@ -1,6 +1,6 @@
 # Marketing_operation_platform_Agent
 
-营销运营平台的 AI 智能助手——一个基于 Vercel AI SDK 的企业级全栈 Agent 系统，面向 ERP + CRM 业务场景，支持流式输出、多步工具调用、循环检测与 API 容错重试。
+营销运营平台的 AI 智能助手——一个基于 Vercel AI SDK 的企业级全栈 Agent 系统，面向全域营销与电商运营业务场景，支持流式输出、多步工具调用、循环检测与 API 容错重试。
 
 ---
 
@@ -8,6 +8,7 @@
 
 - **AI 框架**: Vercel AI SDK (`ai` + `@ai-sdk/openai`)
 - **架构设计**: DDD (领域驱动设计) / 模块化分层架构
+- **提示词工程**: PromptBuilder Pipe (动静分界管道模式，优化 LLM KV Cache)
 - **语言**: TypeScript (ESM)
 - **运行时**: Node.js + tsx
 - **包管理器**: pnpm (锁定版本，请勿使用 npm/yarn 安装依赖)
@@ -102,8 +103,8 @@ const res = await fetch('http://localhost:3001/api/chat', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     sessionId: 'user-001',
-    message: '查一下本月销售额与未履约合同',
-    operatorName: '张三',
+    message: '帮我针对即将到来的中秋节，策划一份私域用户激活与裂变活动方案',
+    operatorName: '运营负责人',
   }),
 });
 
@@ -144,6 +145,29 @@ while (true) {
 
 ---
 
+## 提示词管道体系 (PromptBuilder Pipeline)
+
+系统采用 **动静分界线** 设计模式组装系统提示词（位于 `src/core/context/`），实现 **前缀稳定（最大化 LLM KV Cache 命中）+ 动态环境实时注入**：
+
+```
+PromptBuilder Pipeline
+┌────────────────────────────────────────────────────────┐
+│ [静态管道 - Static Pipes] (固定顺序，最大化 KV 缓存)        │
+│ 1. identityPipe     -> 营销运营专家身份定位             │
+│ 2. capabilitiesPipe -> 目标拆解/活动策划/文案创作/数据分析  │
+│ 3. principlesPipe   -> 真实数据/发布确认/合规性/口径严谨     │
+│ 4. stylePipe        -> 结论先行/表格排版/启发式收敛        │
+│ 5. boundaryPipe     -> 营销领域聚焦与偏航引导             │
+├────────────────────────────────────────────────────────┤
+│ ══════════════════ 动静分界线 ════════════════════════ │
+├────────────────────────────────────────────────────────┤
+│ [动态管道 - Dynamic Pipes] (每次请求最新上下文)          │
+│ 6. environmentPipe  -> 当前日期、当前操作员身份信息       │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 企业级架构设计 (DDD / 模块化分层)
 
 本项目采用 **领域驱动设计 (DDD)** 与 **核心引擎与业务模块解耦** 架构模式：
@@ -180,11 +204,11 @@ src/
 │   │   ├── controllers/                 # health.controller.ts
 │   │   └── types/                       # health.types.ts
 │   │
-│   ├── marketing/                       # 【可扩展业务：智能营销/文案生成模块】
+│   ├── marketing/                       # 【可扩展业务：智能营销活动/文案批量生成】
 │   │   └── ...
-│   ├── crm/                             # 【可扩展业务：CRM 客户线索跟进模块】
+│   ├── crm/                             # 【可扩展业务：CRM 客户线索跟进与画像】
 │   │   └── ...
-│   ├── erp/                             # 【可扩展业务：ERP 进销存/采购单据流模块】
+│   ├── erp/                             # 【可扩展业务：ERP 进销存/采购单据流】
 │   │   └── ...
 │   └── auth/                            # 【可扩展业务：统一鉴权/权限模块】
 │       └── ...
