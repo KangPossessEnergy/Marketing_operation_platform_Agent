@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createMockModel } from "../mock-model";
+import { createMockModel } from "../mock/mock-model";
 import { ToolRegistry } from "../tools/tool-registry";
-import { allTools } from "../tools/indes";
+import { allTools } from "../tools";
 
 export function createAgentRuntime() {
   const apiKey = process.env.API_KEY;

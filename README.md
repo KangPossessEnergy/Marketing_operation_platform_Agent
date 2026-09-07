@@ -1,151 +1,244 @@
 # Marketing_operation_platform_Agent
 
-营销运营平台的 AI 智能助手——一个基于 Vercel AI SDK 的命令行 Agent,面向 ERP + CRM 业务场景,支持流式输出和多步工具调用。
+营销运营平台的 AI 智能助手——一个基于 Vercel AI SDK 的企业级全栈 Agent 系统，面向 ERP + CRM 业务场景，支持流式输出、多步工具调用、循环检测与 API 容错重试。
+
+---
 
 ## 技术栈
 
-- **AI 框架**:Vercel AI SDK(`ai` + `@ai-sdk/openai`)
-- **语言**:TypeScript(ESM)
-- **运行时**:Node.js + tsx
-- **包管理器**:pnpm(锁定版本,请勿使用 npm/yarn 安装依赖)
+- **AI 框架**: Vercel AI SDK (`ai` + `@ai-sdk/openai`)
+- **架构设计**: DDD (领域驱动设计) / 模块化分层架构
+- **语言**: TypeScript (ESM)
+- **运行时**: Node.js + tsx
+- **包管理器**: pnpm (锁定版本，请勿使用 npm/yarn 安装依赖)
+
+---
 
 ## 环境要求
 
 - Node.js >= 18
 - pnpm >= 8
 
+---
+
 ## 快速开始
 
 ```bash
-# 安装依赖
+# 1. 安装依赖
 pnpm install
 
-# 配置环境变量
+# 2. 配置环境变量
 cp .env.example .env   # 填入你的 API_KEY / BASE_URL / NAME
 
-# 启动开发模式(文件变更自动重启)
+# 3. 启动 CLI 交互式终端 (开发模式，文件变更自动重启)
 pnpm dev
 
-# 或直接运行
+# 或直接运行 CLI
 pnpm start
 
-# 类型检查 / 编译
+# 4. 类型检查 / 编译
 pnpm build
 ```
 
-启动后进入交互式对话,输入 `exit` 退出。
+启动后进入交互式对话，输入 `exit` 退出。
 
-> 未配置 `API_KEY` 时会自动切换到内置的 mock 模型,方便本地调试 Agent 流程,无需真实 API。
+> 💡 未配置 `API_KEY` 时会自动切换到内置的 mock 模型，方便本地无鉴权调试 Agent 流程。
 
-## 作为 HTTP 服务运行(供前端调用)
+---
+
+## 作为 HTTP 服务运行 (供前端/第三方调用)
 
 ```bash
-# 启动服务(默认端口 3001,可用 PORT 环境变量覆盖)
+# 启动 HTTP 服务 (默认端口 3001，可用 PORT 环境变量覆盖)
 pnpm server
 
-# 文件变更自动重启
+# 开发模式 (支持热重载)
 pnpm server:dev
 ```
 
-接口:`POST /api/chat`,请求体:
-
+### 1. 健康检查接口
+- **URL**: `GET /api/health`
+- **响应格式**:
 ```json
-{ "sessionId": "会话ID(缺省为 default,传 reset:true 清空该会话历史)", "message": "用户输入", "operatorName": "操作员姓名(可选,注入系统提示词)" }
+{
+  "status": "ok",
+  "timestamp": 1788815944265,
+  "uptime": 15,
+  "toolsCount": 7
+}
 ```
 
-响应为 SSE 流(`text/event-stream`),每行一个 `data: {...}` 事件:
+### 2. AI 对话流式接口 (SSE)
+- **URL**: `POST /api/chat`
+- **请求体 (JSON)**:
+```json
+{
+  "sessionId": "会话ID(缺省为 default，支持多会话隔离)",
+  "message": "用户输入文本",
+  "reset": false,       // 传 true 可清空该会话历史
+  "operatorName": "操作员姓名(可选，动态注入系统提示词)"
+}
+```
 
-| type | 含义 |
-| --- | --- |
-| `step` | Agent 第 N 步开始 |
-| `text` | 模型输出的文本片段(`delta` 字段) |
-| `tool-call` / `tool-result` | 工具调用及其结果 |
-| `continue` | 模型还要继续下一步 |
-| `done` / `error` | 本轮结束 / 出错 |
+- **响应格式**: `text/event-stream; charset=utf-8`，每行一个 `data: {...}` 事件：
 
-前端调用示例:
+| type | 说明 | 负载字段 |
+| --- | --- | --- |
+| `step` | Agent 第 N 步开始 | `step: number` |
+| `text` | 模型增量流式文本片段 | `delta: string` |
+| `tool-call` | 发起工具调用 | `toolName: string, input: unknown` |
+| `tool-result` | 工具执行返回结果 | `toolName: string, output: unknown` |
+| `loop-detected` | 循环/振荡/卡死检测提醒 | `detection: DetectionResult` |
+| `retry` | API 异常重试事件 (429/5xx/断流) | `attempt: number, delayMs: number, message: string` |
+| `continue` | 模型判定需继续下一步思考 | - |
+| `max-steps` | 达到最大步数限制 (50 步) | - |
+| `done` | 对话完成 | - |
+| `error` | 异常错误终止 | `message: string` |
 
+#### 前端调用示例 (Fetch + SSE 流解析):
 ```ts
 const res = await fetch('http://localhost:3001/api/chat', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ sessionId: 'user-001', message: '查一下本月销售额' }),
+  body: JSON.stringify({
+    sessionId: 'user-001',
+    message: '查一下本月销售额与未履约合同',
+    operatorName: '张三',
+  }),
 });
+
 const reader = res.body!.getReader();
 const decoder = new TextDecoder();
 let buf = '';
+
 while (true) {
   const { done, value } = await reader.read();
   if (done) break;
   buf += decoder.decode(value, { stream: true });
-  // 按 \n\n 切分出完整事件,去掉 'data: ' 前缀后 JSON.parse
+  
+  const lines = buf.split('\n\n');
+  buf = lines.pop() || '';
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const event = JSON.parse(line.slice(6));
+      console.log('SSE Event:', event);
+    }
+  }
 }
 ```
 
-⚠️ 服务内置了 shell/文件写入等工具,暴露到网络前请先加鉴权,不要直接对公网开放。
+> ⚠️ **安全提示**：服务内置了 shell、文件读写等工具，暴露到网络环境前请增加鉴权中间件，不要直接对公网无保护开放。
 
-## 环境变量
+---
+
+## 环境变量配置
 
 参考 `.env.example`:
 
-| 变量 | 说明 |
-| --- | --- |
-| `API_KEY` | 模型服务 API Key(留空则使用 mock 模型) |
-| `BASE_URL` | OpenAI 兼容接口地址(中转地址) |
-| `NAME` | 模型名称 |
+| 变量 | 说明 | 示例 |
+| --- | --- | --- |
+| `API_KEY` | 模型服务 API Key (留空则自动启用 mock-model) | `sk-xxxx` |
+| `BASE_URL` | OpenAI 兼容接口地址 (中转/私有网关地址) | `https://api.openai.com/v1` |
+| `NAME` | 模型名称 | `gpt-4o` / `qwen-plus` |
+| `PORT` | HTTP 服务监听端口 (默认: 3001) | `3001` |
 
-## 工作原理
+---
 
-`src/index.ts` 进入 readline 交互循环,用户输入追加到消息历史后交给 `agentLoop`:
+## 企业级架构设计 (DDD / 模块化分层)
 
-1. 模型流式生成回复,可能发起工具调用
-2. 工具由 `ToolRegistry` 统一注册、执行,结果超长时自动截断(保留首尾)
-3. 只要本轮发生了工具调用,就把工具结果带回消息历史继续下一轮,直到模型不再调用工具或达到最大步数(50 步)
+本项目采用 **领域驱动设计 (DDD)** 与 **核心引擎与业务模块解耦** 架构模式：
 
-内置工具:文件读写/编辑、目录列举、glob/grep 搜索、shell 命令执行(见 `src/tools/`)。
-
-系统提示词按「动静分界 + Prompt Pipe」组装(见 `src/context/`):
-
-- **静侧**:身份、能力范围、工作原则、交互风格、职责边界 5 个模块,内容固定、顺序稳定,排在提示词前部(前缀稳定,有利于模型侧缓存)
-- **动侧**:`environment` 模块(当前日期、操作员)永远在最后,由 `buildSystemPrompt()` 在每次请求时注入最新值
-- **Pipe**:`PromptBuilder` 按注册顺序调用各模块,返回 `null` 的模块自动跳过,可用 `debug()` 查看各模块开关状态
-
-## 目录结构
-
+```text
+src/
+├── core/                                # 【核心底层底座 - AI Agent Engine & Infrastructure】
+│   ├── agent/                           # Agent 执行引擎
+│   │   ├── loop.ts                      # ReAct 核心执行循环 (单步迭代驱动)
+│   │   ├── loop-detection.ts            # 循环/振荡/卡死检测 (SHA-256 参数及结果指纹)
+│   │   ├── retry.ts                     # API 容错与重试机制 (指数退避 + 随机 Jitter)
+│   │   └── runtime.ts                   # 运行时装配 (模型加载与工具挂载)
+│   ├── context/                         # 系统提示词管道 (动静分界优化 KV Cache)
+│   │   ├── prompt-builder.ts            # 管道构建器 (PromptBuilder Pipe 模式)
+│   │   ├── index.ts                     # 提示词拼装主入口
+│   │   └── modules/                     # 提示词子模块 (identity, capabilities, principles 等)
+│   ├── tools/                           # 工具注册中心与内置系统工具
+│   │   ├── index.ts                     # 工具统一导出入口
+│   │   ├── tool-registry.ts             # 工具注册表 (自动转换 AI SDK Schema，长输出截断)
+│   │   ├── common/                      # 基础文件读写、目录搜索、Shell 执行工具
+│   │   └── mcp/                         # Model Context Protocol (MCP) 扩展目录
+│   └── mock/
+│       └── mock-model.ts                # 本地模拟大模型 Provider
+│
+├── modules/                             # 【业务领域模块 - Domain Modules】
+│   ├── ai-chat/                         # 【AI 对话领域】
+│   │   ├── controllers/                 # 控制器：chat.controller.ts (参数校验、SSE 驱动)
+│   │   ├── services/                    # 领域服务：chat.service.ts, session.service.ts (滑动窗口防爆炸)
+│   │   ├── sse/                         # SSE 协议传输层：sse-stream.ts (断连监听、保活)
+│   │   ├── types/                       # 契约定义：chat.types.ts
+│   │   └── index.ts                     # 模块导出入口
+│   │
+│   ├── health/                          # 【系统健康监控领域】
+│   │   ├── controllers/                 # health.controller.ts
+│   │   └── types/                       # health.types.ts
+│   │
+│   ├── marketing/                       # 【可扩展业务：智能营销/文案生成模块】
+│   │   └── ...
+│   ├── crm/                             # 【可扩展业务：CRM 客户线索跟进模块】
+│   │   └── ...
+│   ├── erp/                             # 【可扩展业务：ERP 进销存/采购单据流模块】
+│   │   └── ...
+│   └── auth/                            # 【可扩展业务：统一鉴权/权限模块】
+│       └── ...
+│
+├── server/                              # 【HTTP 服务宿主】
+│   ├── index.ts                         # 服务启动入口 (端口监听、优雅停机 SIGINT/SIGTERM)
+│   └── app.ts                           # 路由分发器、CORS 中间件与全局 500 异常兜底
+│
+└── index.ts                             # CLI 终端交互单机调试入口
 ```
-├── src/
-│   ├── index.ts               # CLI 入口:readline 交互循环
-│   ├── mock-model.ts          # 无 API_KEY 时使用的模拟模型
-│   ├── servers/
-│   │   └── index.ts           # HTTP 服务入口:POST /api/chat(SSE 流式)
-│   ├── agent/
-│   │   ├── loop.ts            # Agent 主循环(流式输出 + 工具调用,事件回调)
-│   │   └── runtime.ts         # 模型 + 工具注册的公共装配(CLI/服务共用)
-│   ├── context/               # 系统提示词(动静分界 + Prompt Pipe 组装)
-│   │   ├── index.ts           #   buildSystemPrompt:按序注册模块并拼装
-│   │   ├── prompt-builder.ts  #   PromptBuilder:pipe 注册/拼接/debug
-│   │   └── modules/           #   提示词模块(5 个静态 + environment 动态)
-│   └── tools/
-│       ├── indes.ts           # 工具汇总导出
-│       ├── tool-registry.ts   # 工具注册表(注册/执行/结果截断)
-│       └── CommonTool/        # 内置工具
-│           ├── file-tools.ts  #   文件读写/编辑/目录列举
-│           ├── search-tools.ts#   glob / grep 搜索
-│           └── shell-tools.ts #   shell 命令执行
-├── .env.example       # 环境变量模板
-├── pnpm-workspace.yaml
-└── pnpm-lock.yaml     # 锁文件(必须提交)
-```
+
+---
+
+## 业务模块拓展指南 (如何添加新 Domain)
+
+得益于 `src/modules/` 架构的高内聚设计，添加新业务模块极为简便：
+
+1. **创建新模块目录**（例如创建智能营销文案模块 `src/modules/marketing/`）：
+   ```text
+   src/modules/marketing/
+   ├── controllers/
+   │   └── marketing.controller.ts      # 接收营销生成请求
+   ├── services/
+   │   └── marketing.service.ts         # 编排营销 Agent 与特定 Prompt
+   ├── types/
+   │   └── marketing.types.ts           # DTO 定义
+   └── index.ts
+   ```
+2. **挂载路由至 [src/server/app.ts](src/server/app.ts)**：
+   在 `app.ts` 中引入对应模块的 Controller，即可无缝支持新业务端点，无需侵入 `core/` Agent 核心引擎。
+
+---
 
 ## 常见问题
 
-### pnpm install / pnpm dev 报 ERR_PNPM_IGNORED_BUILDS
+### 1. 端口冲突报错 `EADDRINUSE: address already in use :::3001`
+若之前进程未正常退出导致 3001 端口被占：
+```bash
+# 方案 A: 查找并关闭残留进程
+lsof -i :3001
+kill -9 <PID>
 
-新版 pnpm 默认禁止依赖的安装脚本(postinstall),本项目已批准相关依赖的构建脚本,配置写在 **`pnpm-workspace.yaml`** 的 `allowBuilds` 字段中。该文件和 `pnpm-lock.yaml` 都必须提交到 git,不要加入 .gitignore,否则换机器/换人会复现此报错。
+# 方案 B: 指定其他端口启动
+PORT=3002 pnpm run server:dev
+```
+
+### 2. `pnpm install` 报 `ERR_PNPM_IGNORED_BUILDS`
+本项目已在 `pnpm-workspace.yaml` 的 `allowBuilds` 字段中配置了依赖构建授权，请确保 `pnpm-workspace.yaml` 与 `pnpm-lock.yaml` 文件完整提交。
+
+---
 
 ## 参与贡献
 
 1. Fork 本仓库
-2. 新建 Feat_xxx 分支
-3. 提交代码
-4. 新建 Pull Request
+2. 新建 `feat/xxx` 分支
+3. 提交修改并保证 `pnpm build` 通过
+4. 创建 Pull Request

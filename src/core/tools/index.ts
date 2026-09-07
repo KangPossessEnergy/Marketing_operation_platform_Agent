@@ -4,9 +4,9 @@ import {
   writeFileTool,
   editFileTool,
   listDirectoryTool,
-} from "../tools/CommonTool/file-tools";
-import { globTool, grepTool } from "../tools/CommonTool/search-tools";
-import { bashTool } from "../tools/CommonTool/shell-tools";
+} from "./common/file-tools";
+import { globTool, grepTool } from "./common/search-tools";
+import { bashTool } from "./common/shell-tools";
 
 export const allTools: ToolDefinition[] = [
   globTool,
@@ -27,3 +27,4 @@ export {
   grepTool,
   bashTool,
 };
+export * from "./tool-registry";

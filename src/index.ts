@@ -1,8 +1,8 @@
 import { type ModelMessage } from "ai";
 import { createInterface } from "node:readline";
-import { agentLoop } from "./agent/loop";
-import { createAgentRuntime } from "./agent/runtime";
-import { buildSystemPrompt } from "./context";
+import { agentLoop } from "./core/agent/loop";
+import { createAgentRuntime } from "./core/agent/runtime";
+import { buildSystemPrompt } from "./core/context";
 
 const { model, registry } = createAgentRuntime();
 const system = buildSystemPrompt();
