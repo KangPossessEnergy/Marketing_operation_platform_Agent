@@ -1,12 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { type ModelMessage } from "ai";
-import { agentLoop } from "./agent/loop";
-import { createAgentRuntime } from "./agent/runtime";
+import { agentLoop } from "../agent/loop";
+import { createAgentRuntime } from "../agent/runtime";
 
 const { model, registry, system } = createAgentRuntime();
 console.log(`已注册 ${registry.getAll().length} 个工具`);
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 3001);
 
 // 会话历史按 sessionId 隔离，进程重启即丢失
 const sessions = new Map<string, ModelMessage[]>();

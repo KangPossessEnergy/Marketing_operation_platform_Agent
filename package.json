@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "server": "tsx src/server.ts",
-    "server:dev": "tsx watch src/server.ts",
+    "server": "tsx src/servers/index.ts",
+    "server:dev": "tsx watch src/servers/index.ts",
     "build": "tsc"
   },
   "dependencies": {
