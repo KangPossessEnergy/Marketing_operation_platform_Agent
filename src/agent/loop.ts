@@ -3,17 +3,27 @@ import { ToolRegistry } from '../tools/tool-registry';
 
 const MAX_STEPS = 50;
 
+export interface AgentEvents {
+  onStep?: (step: number) => void;
+  onText?: (delta: string) => void;
+  onToolCall?: (toolName: string, input: unknown) => void;
+  onToolResult?: (toolName: string, output: unknown) => void;
+  onContinue?: () => void;
+  onMaxSteps?: () => void;
+}
+
 export async function agentLoop(
   model: any,
   registry: ToolRegistry,
   messages: ModelMessage[],
   system: string,
+  events: AgentEvents = {},
 ) {
   let step = 0;
 
   while (step < MAX_STEPS) {
     step++;
-    console.log(`\n--- Step ${step} ---`);
+    events.onStep?.(step);
 
     const result = streamText({
       model,
@@ -24,22 +34,20 @@ export async function agentLoop(
     });
 
     let hasToolCall = false;
-    let fullText = '';
 
     for await (const part of result.fullStream) {
       switch (part.type) {
         case 'text-delta':
-          process.stdout.write(part.text);
-          fullText += part.text;
+          events.onText?.(part.text);
           break;
 
         case 'tool-call':
           hasToolCall = true;
-          console.log(`  [调用: ${part.toolName}(${JSON.stringify(part.input)})]`);
+          events.onToolCall?.(part.toolName, part.input);
           break;
 
         case 'tool-result':
-          console.log(`  [结果: ${JSON.stringify(part.output)}]`);
+          events.onToolResult?.(part.toolName, part.output);
           break;
       }
     }
@@ -50,15 +58,14 @@ export async function agentLoop(
 
     // 退出条件：模型没有调用任何工具，说明它认为可以直接回复了
     if (!hasToolCall) {
-      if (fullText) console.log();
       break;
     }
 
     // 还有工具调用 → 继续循环，让模型看到工具结果后继续思考
-    console.log('  → 模型还在工作，继续下一步...');
+    events.onContinue?.();
   }
 
   if (step >= MAX_STEPS) {
-    console.log('\n[达到最大步数限制，强制停止]');
+    events.onMaxSteps?.();
   }
 }

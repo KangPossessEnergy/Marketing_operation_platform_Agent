@@ -37,6 +37,53 @@ pnpm build
 
 > 未配置 `API_KEY` 时会自动切换到内置的 mock 模型,方便本地调试 Agent 流程,无需真实 API。
 
+## 作为 HTTP 服务运行(供前端调用)
+
+```bash
+# 启动服务(默认端口 3000,可用 PORT 环境变量覆盖)
+pnpm server
+
+# 文件变更自动重启
+pnpm server:dev
+```
+
+接口:`POST /api/chat`,请求体:
+
+```json
+{ "sessionId": "会话ID(缺省为 default,传 reset:true 清空该会话历史)", "message": "用户输入" }
+```
+
+响应为 SSE 流(`text/event-stream`),每行一个 `data: {...}` 事件:
+
+| type | 含义 |
+| --- | --- |
+| `step` | Agent 第 N 步开始 |
+| `text` | 模型输出的文本片段(`delta` 字段) |
+| `tool-call` / `tool-result` | 工具调用及其结果 |
+| `continue` | 模型还要继续下一步 |
+| `done` / `error` | 本轮结束 / 出错 |
+
+前端调用示例:
+
+```ts
+const res = await fetch('http://localhost:3000/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ sessionId: 'user-001', message: '查一下本月销售额' }),
+});
+const reader = res.body!.getReader();
+const decoder = new TextDecoder();
+let buf = '';
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  buf += decoder.decode(value, { stream: true });
+  // 按 \n\n 切分出完整事件,去掉 'data: ' 前缀后 JSON.parse
+}
+```
+
+⚠️ 服务内置了 shell/文件写入等工具,暴露到网络前请先加鉴权,不要直接对公网开放。
+
 ## 环境变量
 
 参考 `.env.example`:
@@ -61,10 +108,12 @@ pnpm build
 
 ```
 ├── src/
-│   ├── index.ts               # 入口:readline 交互循环
+│   ├── index.ts               # CLI 入口:readline 交互循环
+│   ├── server.ts              # HTTP 服务入口:POST /api/chat(SSE 流式)
 │   ├── mock-model.ts          # 无 API_KEY 时使用的模拟模型
 │   ├── agent/
-│   │   └── loop.ts            # Agent 主循环(流式输出 + 工具调用)
+│   │   ├── loop.ts            # Agent 主循环(流式输出 + 工具调用,事件回调)
+│   │   └── runtime.ts         # 模型 + 工具注册的公共装配(CLI/服务共用)
 │   ├── context/
 │   │   └── index.ts           # 系统提示词(ERP + CRM 助手人设)
 │   └── tools/

@@ -1,25 +1,9 @@
-import "dotenv/config";
 import { type ModelMessage } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createMockModel } from "./mock-model";
 import { createInterface } from "node:readline";
 import { agentLoop } from "./agent/loop";
-import { allTools } from "./tools/indes";
-import { ToolRegistry } from "./tools/tool-registry";
-import { SYSTEM } from "./context";
+import { createAgentRuntime } from "./agent/runtime";
 
-const apiKey = process.env.API_KEY;
-
-const gemini = createOpenAI({
-  baseURL: process.env.BASE_URL,
-  apiKey: process.env.API_KEY,
-  name: process.env.NAME,
-});
-
-const model: any = apiKey ? gemini.chat(`${process.env.NAME}`) : createMockModel();
-
-const registry = new ToolRegistry();
-registry.register(...allTools);
+const { model, registry, system } = createAgentRuntime();
 console.log(`已注册 ${registry.getAll().length} 个工具：`);
 
 const rl = createInterface({
@@ -27,8 +11,6 @@ const rl = createInterface({
   output: process.stdout,
 });
 const messages: ModelMessage[] = [];
-
-
 
 async function ask() {
   rl.question("\nYou: ", async (input) => {
@@ -40,7 +22,23 @@ async function ask() {
     }
 
     messages.push({ role: "user", content: trimmed });
-    await agentLoop(model, registry, messages, SYSTEM);
+
+    let printed = false;
+    await agentLoop(model, registry, messages, system, {
+      onStep: (step) => console.log(`\n--- Step ${step} ---`),
+      onText: (delta) => {
+        printed = true;
+        process.stdout.write(delta);
+      },
+      onToolCall: (name, input) =>
+        console.log(`  [调用: ${name}(${JSON.stringify(input)})]`),
+      onToolResult: (name, output) =>
+        console.log(`  [结果: ${JSON.stringify(output)}]`),
+      onContinue: () => console.log("  → 模型还在工作，继续下一步..."),
+      onMaxSteps: () => console.log("\n[达到最大步数限制，强制停止]"),
+    });
+    if (printed) console.log();
+
     ask();
   });
 }
