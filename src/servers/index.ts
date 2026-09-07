@@ -91,6 +91,15 @@ const server = createServer(async (req, res) => {
           sseWrite(res, { type: "tool-call", toolName, input }),
         onToolResult: (toolName, output) =>
           sseWrite(res, { type: "tool-result", toolName, output }),
+        onLoopDetected: (detection) =>
+          sseWrite(res, { type: "loop-detected", detection }),
+        onRetry: (attempt, error, delayMs) =>
+          sseWrite(res, {
+            type: "retry",
+            attempt,
+            delayMs,
+            message: error instanceof Error ? error.message : String(error),
+          }),
         onContinue: () => sseWrite(res, { type: "continue" }),
         onMaxSteps: () => sseWrite(res, { type: "max-steps" }),
       });

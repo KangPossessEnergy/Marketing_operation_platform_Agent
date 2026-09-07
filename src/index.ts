@@ -36,6 +36,15 @@ async function ask() {
         console.log(`  [调用: ${name}(${JSON.stringify(input)})]`),
       onToolResult: (name, output) =>
         console.log(`  [结果: ${JSON.stringify(output)}]`),
+      onLoopDetected: (detection) => {
+        if ('message' in detection) {
+          console.warn(`  \x1b[33m${detection.message}\x1b[0m`);
+        }
+      },
+      onRetry: (attempt, error, delayMs) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn(`  \x1b[31m[API 异常重试] 第 ${attempt} 次重试，等待 ${delayMs}ms，错误: ${msg}\x1b[0m`);
+      },
       onContinue: () => console.log("  → 模型还在工作，继续下一步..."),
       onMaxSteps: () => console.log("\n[达到最大步数限制，强制停止]"),
     });
