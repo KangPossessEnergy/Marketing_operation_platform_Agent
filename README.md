@@ -50,7 +50,7 @@ pnpm server:dev
 接口:`POST /api/chat`,请求体:
 
 ```json
-{ "sessionId": "会话ID(缺省为 default,传 reset:true 清空该会话历史)", "message": "用户输入" }
+{ "sessionId": "会话ID(缺省为 default,传 reset:true 清空该会话历史)", "message": "用户输入", "operatorName": "操作员姓名(可选,注入系统提示词)" }
 ```
 
 响应为 SSE 流(`text/event-stream`),每行一个 `data: {...}` 事件:
@@ -102,20 +102,29 @@ while (true) {
 2. 工具由 `ToolRegistry` 统一注册、执行,结果超长时自动截断(保留首尾)
 3. 只要本轮发生了工具调用,就把工具结果带回消息历史继续下一轮,直到模型不再调用工具或达到最大步数(50 步)
 
-内置工具:文件读写/编辑、目录列举、glob/grep 搜索、shell 命令执行(见 `src/tools/`)。系统提示词定义了 ERP + CRM 助手的能力范围与工作原则(见 `src/context/index.ts`)。
+内置工具:文件读写/编辑、目录列举、glob/grep 搜索、shell 命令执行(见 `src/tools/`)。
+
+系统提示词按「动静分界 + Prompt Pipe」组装(见 `src/context/`):
+
+- **静侧**:身份、能力范围、工作原则、交互风格、职责边界 5 个模块,内容固定、顺序稳定,排在提示词前部(前缀稳定,有利于模型侧缓存)
+- **动侧**:`environment` 模块(当前日期、操作员)永远在最后,由 `buildSystemPrompt()` 在每次请求时注入最新值
+- **Pipe**:`PromptBuilder` 按注册顺序调用各模块,返回 `null` 的模块自动跳过,可用 `debug()` 查看各模块开关状态
 
 ## 目录结构
 
 ```
 ├── src/
 │   ├── index.ts               # CLI 入口:readline 交互循环
-│   ├── server.ts              # HTTP 服务入口:POST /api/chat(SSE 流式)
 │   ├── mock-model.ts          # 无 API_KEY 时使用的模拟模型
+│   ├── servers/
+│   │   └── index.ts           # HTTP 服务入口:POST /api/chat(SSE 流式)
 │   ├── agent/
 │   │   ├── loop.ts            # Agent 主循环(流式输出 + 工具调用,事件回调)
 │   │   └── runtime.ts         # 模型 + 工具注册的公共装配(CLI/服务共用)
-│   ├── context/
-│   │   └── index.ts           # 系统提示词(ERP + CRM 助手人设)
+│   ├── context/               # 系统提示词(动静分界 + Prompt Pipe 组装)
+│   │   ├── index.ts           #   buildSystemPrompt:按序注册模块并拼装
+│   │   ├── prompt-builder.ts  #   PromptBuilder:pipe 注册/拼接/debug
+│   │   └── modules/           #   提示词模块(5 个静态 + environment 动态)
 │   └── tools/
 │       ├── indes.ts           # 工具汇总导出
 │       ├── tool-registry.ts   # 工具注册表(注册/执行/结果截断)

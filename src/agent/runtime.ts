@@ -3,7 +3,6 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createMockModel } from "../mock-model";
 import { ToolRegistry } from "../tools/tool-registry";
 import { allTools } from "../tools/indes";
-import { SYSTEM } from "../context";
 
 export function createAgentRuntime() {
   const apiKey = process.env.API_KEY;
@@ -19,5 +18,5 @@ export function createAgentRuntime() {
   const registry = new ToolRegistry();
   registry.register(...allTools);
 
-  return { model, registry, system: SYSTEM };
+  return { model, registry };
 }

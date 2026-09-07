@@ -2,8 +2,10 @@ import { type ModelMessage } from "ai";
 import { createInterface } from "node:readline";
 import { agentLoop } from "./agent/loop";
 import { createAgentRuntime } from "./agent/runtime";
+import { buildSystemPrompt } from "./context";
 
-const { model, registry, system } = createAgentRuntime();
+const { model, registry } = createAgentRuntime();
+const system = buildSystemPrompt();
 console.log(`已注册 ${registry.getAll().length} 个工具：`);
 
 const rl = createInterface({

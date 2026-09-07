@@ -2,8 +2,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { type ModelMessage } from "ai";
 import { agentLoop } from "../agent/loop";
 import { createAgentRuntime } from "../agent/runtime";
+import { buildSystemPrompt } from "../context";
 
-const { model, registry, system } = createAgentRuntime();
+const { model, registry } = createAgentRuntime();
 console.log(`已注册 ${registry.getAll().length} 个工具`);
 
 const PORT = Number(process.env.PORT || 3001);
@@ -45,7 +46,12 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && path === "/api/chat") {
-    let payload: { sessionId?: string; message?: string; reset?: boolean };
+    let payload: {
+      sessionId?: string;
+      message?: string;
+      reset?: boolean;
+      operatorName?: string;
+    };
     try {
       payload = JSON.parse(await readBody(req));
     } catch {
@@ -73,6 +79,9 @@ const server = createServer(async (req, res) => {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
+
+    // 动静分界线:动态部分按请求组装,日期/操作员每次取最新值
+    const system = buildSystemPrompt({ operatorName: payload.operatorName });
 
     try {
       await agentLoop(model, registry, messages, system, {
