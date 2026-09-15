@@ -23,7 +23,7 @@ export class AiChatController {
       'SSE 流（text/event-stream），每行一个 data: {...} chunk：start → start-step → text-start/text-delta/text-end、tool-input-available/tool-output-available、data-step/data-loop-detected/data-retry/data-continue/data-max-steps → finish，最终以 data: [DONE] 结束。',
   })
   @ApiResponse({ status: 400, description: '请求参数校验失败（如 message 为空）' })
-  chat(@Body() dto: ChatRequestDto, @Res() res: Response): void {
+  async chat(@Body() dto: ChatRequestDto, @Res() res: Response): Promise<void> {
     const stream = createUIMessageStream<ChatUIMessage>({
       execute: async ({ writer }) => {
         await this.aiChatService.handleChat(dto, writer);
@@ -31,6 +31,16 @@ export class AiChatController {
       onError: (error) => (error instanceof Error ? error.message : String(error)),
     });
 
-    void pipeUIMessageStreamToResponse({ response: res, stream });
+    await pipeUIMessageStreamToResponse({
+      response: res,
+      stream,
+      headers: {
+        // Keep SSE chunks flowing through reverse proxies and compression middleware.
+        'cache-control': 'no-cache, no-transform',
+        'content-encoding': 'none',
+        'connection': 'keep-alive',
+        'transfer-encoding': 'chunked',
+      },
+    });
   }
 }
