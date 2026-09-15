@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AiChatModule } from './ai-chat/chat.module';
+import { AiChatModule } from './ai-chat/ai-chat.module';
 import { HealthModule } from './health/health.module';
 
 @Module({

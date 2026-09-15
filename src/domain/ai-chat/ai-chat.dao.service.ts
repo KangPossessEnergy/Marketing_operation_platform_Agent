@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { ModelMessage } from 'ai';
 
+/**
+ * AI 对话数据访问层（DAO）：管理多会话消息历史，进程内内存存储 + 滑动窗口截断
+ */
 @Injectable()
-export class SessionService {
+export class AiChatDaoService {
   private sessions = new Map<string, ModelMessage[]>();
   private maxHistoryLength: number = 30;
 

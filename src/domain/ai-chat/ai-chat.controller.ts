@@ -2,14 +2,13 @@ import { Body, Controller, Post, Res } from '@nestjs/common';
 import { ApiOperation, ApiProduces, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
 import type { Response } from 'express';
-import { ChatService } from './chat.service';
-import { ChatRequestDto } from './dto/chat-request.dto';
-import type { ChatUIMessage } from './types/chat.types';
+import { ChatRequestDto, type ChatUIMessage } from './ai-chat.entity';
+import { AiChatService } from './ai-chat.services';
 
 @ApiTags('AI 对话')
 @Controller('api/chat')
-export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+export class AiChatController {
+  constructor(private readonly aiChatService: AiChatService) {}
 
   @Post()
   @ApiOperation({
@@ -27,7 +26,7 @@ export class ChatController {
   chat(@Body() dto: ChatRequestDto, @Res() res: Response): void {
     const stream = createUIMessageStream<ChatUIMessage>({
       execute: async ({ writer }) => {
-        await this.chatService.handleChat(dto, writer);
+        await this.aiChatService.handleChat(dto, writer);
       },
       onError: (error) => (error instanceof Error ? error.message : String(error)),
     });

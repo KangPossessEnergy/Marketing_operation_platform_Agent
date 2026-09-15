@@ -212,46 +212,53 @@ src/
 │   └── mock/
 │       └── mock-model.ts                # 本地模拟大模型 Provider
 │
-└── modules/                             # 【业务领域模块 - Nest 特性模块】
-    ├── ai-chat/                         # 【AI 对话领域】
-    │   ├── chat.module.ts               # 特性模块 (providers: ChatService / SessionService / AGENT_RUNTIME 工厂)
-    │   ├── chat.controller.ts           # @Controller('api/chat')：createUIMessageStream + pipeUIMessageStreamToResponse
-    │   ├── chat.service.ts              # @Injectable：驱动 agentLoop，领域事件 → UI chunk 映射
-    │   ├── session.service.ts           # @Injectable：多会话历史管理 (滑动窗口防爆炸)
-    │   ├── dto/                         # chat-request.dto.ts (class-validator 校验)
-    │   └── types/                       # chat.types.ts (ChatUIMessage / data-* 部分类型)
-    │
-    ├── health/                          # 【系统健康监控领域】
-    │   ├── health.module.ts             # imports AiChatModule 复用 ChatService
-    │   ├── health.controller.ts         # @Controller('api/health')
-    │   └── types/                       # health.types.ts
-    │
-    ├── marketing/                       # 【可扩展业务：智能营销活动/文案批量生成】
-    │   └── ...
-    ├── crm/                             # 【可扩展业务：CRM 客户线索跟进与画像】
-    │   └── ...
-    ├── erp/                             # 【可扩展业务：ERP 进销存/采购单据流】
-    │   └── ...
-    └── auth/                            # 【可扩展业务：统一鉴权/权限模块】
-        └── ...
+├── swagger/                             # 【API 文档】swagger.ts / swagger.config.ts（UI 挂载在 /docs）
+├── domain/                              # 【业务领域模块 - Nest 特性模块，五件套标准结构】
+│   ├── index.ts                         # 领域说明文档（各子模块目录结构注释）
+│   ├── domain.module.ts                 # 领域聚合模块（统一 imports 并 re-export 业务能力）
+│   │
+│   ├── ai-chat/                         # 【AI 对话领域】
+│   │   ├── ai-chat.controller.ts        # 路由入口：POST /api/chat（createUIMessageStream + pipeUIMessageStreamToResponse）
+│   │   ├── ai-chat.services.ts          # 业务逻辑：驱动 agentLoop，领域事件 → UI chunk 映射（导出 AGENT_RUNTIME）
+│   │   ├── ai-chat.dao.service.ts       # 数据访问层：多会话历史存储（内存 Map + 滑动窗口截断）
+│   │   ├── ai-chat.entity.ts            # 实体定义：ChatRequestDto / ChatDataParts / ChatUIMessage
+│   │   └── ai-chat.module.ts            # 模块定义：组装以上各部分（exports: AiChatService / AGENT_RUNTIME）
+│   │
+│   ├── health/                          # 【系统健康监控领域】（无持久化需求，不含 DAO）
+│   │   ├── health.controller.ts         # 路由入口：GET /api/health
+│   │   ├── health.services.ts           # 业务逻辑：汇总状态/运行时长/工具数（注入 AiChatService）
+│   │   ├── health.entity.ts             # 实体定义：HealthResponseDto
+│   │   └── health.module.ts             # 模块定义：imports AiChatModule
+│   │
+│   ├── marketing/                       # 【可扩展业务：智能营销活动/文案批量生成】
+│   │   └── ...
+│   ├── crm/                             # 【可扩展业务：CRM 客户线索跟进与画像】
+│   │   └── ...
+│   ├── erp/                             # 【可扩展业务：ERP 进销存/采购单据流】
+│   │   └── ...
+│   └── auth/                            # 【可扩展业务：统一鉴权/权限模块】
+│       └── ...
 ```
 
 ---
 
 ## 业务模块拓展指南 (如何添加新 Domain)
 
-得益于 Nest 特性模块 + `src/modules/` 的高内聚设计，添加新业务模块极为简便：
+得益于 `src/domain/` 的五件套标准结构，添加新业务模块极为简便：
 
-1. **创建新特性模块**（例如智能营销文案模块），推荐使用 nest-cli 生成骨架：
-   ```bash
-   npx nest g module modules/marketing
-   npx nest g controller modules/marketing
-   npx nest g service modules/marketing
+1. **创建新特性模块**（例如智能营销文案模块），按标准目录结构组织：
+   ```text
+   src/domain/marketing/
+   ├── marketing.controller.ts      # 路由入口，接收 HTTP 请求
+   ├── marketing.services.ts        # 业务逻辑
+   ├── marketing.dao.service.ts     # 数据访问层（DAO，可选——有持久化需求时添加）
+   ├── marketing.entity.ts          # 数据实体定义（DTO / 类型）
+   └── marketing.module.ts          # 模块定义，组装以上各部分
    ```
-   或在 `src/modules/marketing/` 下手工创建 `marketing.module.ts` / `marketing.controller.ts` / `marketing.service.ts` / `dto/`。
-2. **挂载到根模块 [src/app.module.ts](src/app.module.ts)**：
+2. **挂载到领域聚合模块 [src/domain/domain.module.ts](src/domain/domain.module.ts)**：
    在 `imports` 中加入 `MarketingModule` 即可暴露新端点，无需侵入 `core/` Agent 核心引擎。
-3. 如需复用 Agent 能力，在 `AiChatModule` 中 `exports` 所需 provider（如 `AGENT_RUNTIME` / `SessionService`），然后在新模块 `imports: [AiChatModule]` 注入使用。
+   注意：若上层模块（如 AppModule）需要注入新模块导出的 provider，记得在 `domain.module.ts` 补 `exports`（Nest 模块导出不会自动传递）。
+3. 如需复用 Agent 能力，在新模块 `imports: [AiChatModule]` 后注入 `AGENT_RUNTIME` / `AiChatService` 使用。
 
 ---
 

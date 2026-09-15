@@ -3,9 +3,8 @@ import type { UIMessageStreamWriter } from 'ai';
 import { agentLoop } from '../../core/agent/loop';
 import { createAgentRuntime } from '../../core/agent/runtime';
 import { buildSystemPrompt } from '../../core/context';
-import { ChatRequestDto } from './dto/chat-request.dto';
-import { SessionService } from './session.service';
-import type { ChatUIMessage } from './types/chat.types';
+import { AiChatDaoService } from './ai-chat.dao.service';
+import type { ChatRequestDto, ChatUIMessage } from './ai-chat.entity';
 
 export const AGENT_RUNTIME = 'AGENT_RUNTIME';
 export type AgentRuntime = ReturnType<typeof createAgentRuntime>;
@@ -16,13 +15,13 @@ const MAX_STEPS = 50;
  * AI 对话核心领域服务：驱动 ReAct Agent 循环，并把领域事件映射为 AI SDK UI Message Stream chunk
  */
 @Injectable()
-export class ChatService {
+export class AiChatService {
   constructor(
     @Inject(AGENT_RUNTIME) private readonly runtime: AgentRuntime,
-    private readonly sessionService: SessionService,
+    private readonly aiChatDao: AiChatDaoService,
   ) {
     console.log(
-      `[ChatService] AI 对话引擎初始化完成，注册工具数量: ${this.runtime.registry.getAll().length}`,
+      `[AiChatService] AI 对话引擎初始化完成，注册工具数量: ${this.runtime.registry.getAll().length}`,
     );
   }
 
@@ -37,9 +36,9 @@ export class ChatService {
     const sessionId = dto.sessionId?.trim() || 'default';
 
     if (dto.reset) {
-      this.sessionService.clear(sessionId);
+      this.aiChatDao.clear(sessionId);
     }
-    const messages = this.sessionService.appendUserMessage(sessionId, dto.message.trim());
+    const messages = this.aiChatDao.appendUserMessage(sessionId, dto.message.trim());
 
     const systemPrompt = buildSystemPrompt({
       operatorName: dto.operatorName,
