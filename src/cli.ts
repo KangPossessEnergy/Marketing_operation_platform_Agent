@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { type ModelMessage } from "ai";
 import { createInterface } from "node:readline";
 import { agentLoop } from "./core/agent/loop";
