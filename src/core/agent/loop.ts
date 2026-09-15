@@ -15,8 +15,8 @@ const MAX_RETRIES = 3;
 export interface AgentEvents {
   onStep?: (step: number) => void;
   onText?: (delta: string) => void;
-  onToolCall?: (toolName: string, input: unknown) => void;
-  onToolResult?: (toolName: string, output: unknown) => void;
+  onToolCall?: (toolCallId: string, toolName: string, input: unknown) => void;
+  onToolResult?: (toolCallId: string, toolName: string, output: unknown) => void;
   onContinue?: () => void;
   onMaxSteps?: () => void;
   onLoopDetected?: (detection: DetectionResult) => void;
@@ -72,7 +72,7 @@ export async function agentLoop(
 
             case 'tool-call': {
               hasToolCall = true;
-              events.onToolCall?.(part.toolName, part.input);
+              events.onToolCall?.(part.toolCallId, part.toolName, part.input);
 
               // 循环检测：先检测当前调用是否陷入循环，再记录调用
               const detection = detect(part.toolName, part.input);
@@ -90,7 +90,7 @@ export async function agentLoop(
             }
 
             case 'tool-result': {
-              events.onToolResult?.(part.toolName, part.output);
+              events.onToolResult?.(part.toolCallId, part.toolName, part.output);
               // 补录工具结果哈希，用于无进展熔断检测
               recordResult(part.toolName, part.input, part.output);
               break;

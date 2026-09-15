@@ -1,27 +1,21 @@
-import type { ModelMessage } from "ai";
+import { Injectable } from '@nestjs/common';
+import type { ModelMessage } from 'ai';
 
-export interface SessionConfig {
-  maxHistoryLength?: number;
-}
-
+@Injectable()
 export class SessionService {
   private sessions = new Map<string, ModelMessage[]>();
-  private maxHistoryLength: number;
+  private maxHistoryLength: number = 30;
 
-  constructor(config: SessionConfig = {}) {
-    this.maxHistoryLength = config.maxHistoryLength ?? 30;
-  }
-
-  public getOrCreate(sessionId: string = "default", reset: boolean = false): ModelMessage[] {
+  public getOrCreate(sessionId: string = 'default', reset: boolean = false): ModelMessage[] {
     if (reset || !this.sessions.has(sessionId)) {
       this.sessions.set(sessionId, []);
     }
     return this.sessions.get(sessionId)!;
   }
 
-  public appendUserMessage(sessionId: string = "default", text: string): ModelMessage[] {
+  public appendUserMessage(sessionId: string = 'default', text: string): ModelMessage[] {
     const messages = this.getOrCreate(sessionId);
-    messages.push({ role: "user", content: text });
+    messages.push({ role: 'user', content: text });
     this.trimHistory(sessionId);
     return messages;
   }
@@ -42,5 +36,3 @@ export class SessionService {
     }
   }
 }
-
-export const sessionService = new SessionService();

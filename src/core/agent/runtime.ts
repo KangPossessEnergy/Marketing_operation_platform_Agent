@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createMockModel } from "../mock/mock-model";
 import { ToolRegistry } from "../tools/tool-registry";

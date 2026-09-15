@@ -32,9 +32,9 @@ async function ask() {
         printed = true;
         process.stdout.write(delta);
       },
-      onToolCall: (name, input) =>
+      onToolCall: (_toolCallId, name, input) =>
         console.log(`  [调用: ${name}(${JSON.stringify(input)})]`),
-      onToolResult: (name, output) =>
+      onToolResult: (_toolCallId, name, output) =>
         console.log(`  [结果: ${JSON.stringify(output)}]`),
       onLoopDetected: (detection) => {
         if ('message' in detection) {
