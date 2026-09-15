@@ -1,10 +1,13 @@
+//AppModule管"基础设施"
+
 import { Module } from '@nestjs/common';
+import { AppService } from './app.service';
 import { AppController } from './app.controller';
-import { AiChatModule } from './modules/ai-chat/chat.module';
-import { HealthModule } from './modules/health/health.module';
+import { DomainModule } from './domain/domain.module';
 
 @Module({
-  imports: [AiChatModule, HealthModule],
+  imports: [DomainModule],
   controllers: [AppController],
+  providers:[AppService]
 })
 export class AppModule {}

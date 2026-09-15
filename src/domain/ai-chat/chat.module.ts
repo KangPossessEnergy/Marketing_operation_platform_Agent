@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { createAgentRuntime } from '../../core/agent/runtime';
 import { ChatController } from './chat.controller';
-import { AGENT_RUNTIME, ChatService } from './chat.service';
 import { SessionService } from './session.service';
+import { AGENT_RUNTIME, ChatService } from './chat.service';
 
 @Module({
   controllers: [ChatController],
