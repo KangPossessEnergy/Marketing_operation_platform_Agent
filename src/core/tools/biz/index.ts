@@ -2,6 +2,23 @@
 //此处指的是业务工具
 
 import { ToolDefinition } from "../tool-registry";
-import { queryProductDataTool } from "./product-tools";
+import { queryProductDataTool, queryProductListTool } from "./product-tools";
+import { queryOrdersTool, queryOrderDetailTool } from "./order-tools";
+import {
+  queryCustomerTool,
+  queryCustomerRfmTool,
+  queryFollowRecordsTool,
+} from "./customer-tools";
+import { queryInventoryTool, queryStockWarningTool } from "./inventory-tools";
 
-export const BizTool: ToolDefinition[] = [queryProductDataTool];
+export const BizTool: ToolDefinition[] = [
+  queryProductDataTool,
+  queryProductListTool,
+  queryOrdersTool,
+  queryOrderDetailTool,
+  queryCustomerTool,
+  queryCustomerRfmTool,
+  queryFollowRecordsTool,
+  queryInventoryTool,
+  queryStockWarningTool,
+];
