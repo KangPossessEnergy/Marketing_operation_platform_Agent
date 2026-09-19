@@ -49,16 +49,25 @@ export class AiChatService {
     let step = 0;
     let textSeq = 0;
     let openTextId: string | null = null;
+    let reasoningSeq = 0;
+    let openReasoningId: string | null = null;
     const closeText = () => {
       if (openTextId !== null) {
         writer.write({ type: 'text-end', id: openTextId });
         openTextId = null;
       }
     };
+    const closeReasoning = () => {
+      if (openReasoningId !== null) {
+        writer.write({ type: 'reasoning-end', id: openReasoningId });
+        openReasoningId = null;
+      }
+    };
 
     await agentLoop(this.runtime.model, this.runtime.registry, messages, systemPrompt, {
       onStep: (n) => {
         step = n;
+        closeReasoning();
         closeText();
         if (n > 1) {
           writer.write({ type: 'finish-step' });
@@ -66,7 +75,16 @@ export class AiChatService {
         writer.write({ type: 'start-step' });
         writer.write({ type: 'data-step', data: { step: n }, transient: true });
       },
+      onReasoning: (delta) => {
+        closeText();
+        if (openReasoningId === null) {
+          openReasoningId = `reasoning-${step}-${++reasoningSeq}`;
+          writer.write({ type: 'reasoning-start', id: openReasoningId });
+        }
+        writer.write({ type: 'reasoning-delta', id: openReasoningId, delta });
+      },
       onText: (delta) => {
+        closeReasoning();
         if (openTextId === null) {
           openTextId = `text-${step}-${++textSeq}`;
           writer.write({ type: 'text-start', id: openTextId });
@@ -74,6 +92,7 @@ export class AiChatService {
         writer.write({ type: 'text-delta', id: openTextId, delta });
       },
       onToolCall: (toolCallId, toolName, input) => {
+        closeReasoning();
         closeText();
         writer.write({ type: 'tool-input-available', toolCallId, toolName, input });
       },
@@ -102,6 +121,7 @@ export class AiChatService {
       },
     });
 
+    closeReasoning();
     closeText();
     if (step > 0) {
       writer.write({ type: 'finish-step' });

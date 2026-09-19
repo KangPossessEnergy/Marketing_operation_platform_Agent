@@ -16,44 +16,69 @@ const rl = createInterface({
 const messages: ModelMessage[] = [];
 
 async function ask() {
-  rl.question("\nYou: ", async (input) => {
-    const trimmed = input.trim();
-    if (!trimmed || trimmed === "exit") {
-      console.log("Bye!");
-      rl.close();
-      return;
-    }
+  try {
+    process.stdout.write("\nYou: ");
+    for await (const input of rl) {
+      const trimmed = input.trim();
+      if (!trimmed || trimmed === "exit") {
+        console.log("Bye!");
+        return;
+      }
 
-    messages.push({ role: "user", content: trimmed });
+      messages.push({ role: "user", content: trimmed });
 
-    let printed = false;
-    await agentLoop(model, registry, messages, system, {
-      onStep: (step) => console.log(`\n--- Step ${step} ---`),
-      onText: (delta) => {
-        printed = true;
-        process.stdout.write(delta);
-      },
-      onToolCall: (_toolCallId, name, input) =>
-        console.log(`  [调用: ${name}(${JSON.stringify(input)})]`),
-      onToolResult: (_toolCallId, name, output) =>
-        console.log(`  [结果: ${JSON.stringify(output)}]`),
-      onLoopDetected: (detection) => {
-        if ('message' in detection) {
-          console.warn(`  \x1b[33m${detection.message}\x1b[0m`);
+      let printed = false;
+      let reasoningPrinted = false;
+      const closeReasoning = () => {
+        if (reasoningPrinted) {
+          process.stdout.write("\x1b[0m\n\n");
+          reasoningPrinted = false;
         }
-      },
-      onRetry: (attempt, error, delayMs) => {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.warn(`  \x1b[31m[API 异常重试] 第 ${attempt} 次重试，等待 ${delayMs}ms，错误: ${msg}\x1b[0m`);
-      },
-      onContinue: () => console.log("  → 模型还在工作，继续下一步..."),
-      onMaxSteps: () => console.log("\n[达到最大步数限制，强制停止]"),
-    });
-    if (printed) console.log();
+      };
 
-    ask();
-  });
+      await agentLoop(model, registry, messages, system, {
+        onStep: (step) => console.log(`\n--- Step ${step} ---`),
+        onReasoning: (delta) => {
+          printed = true;
+          if (!reasoningPrinted) {
+            process.stdout.write("\n\x1b[90m[推理] ");
+            reasoningPrinted = true;
+          }
+          process.stdout.write(delta);
+        },
+        onText: (delta) => {
+          closeReasoning();
+          printed = true;
+          process.stdout.write(delta);
+        },
+        onToolCall: (_toolCallId, name, input) => {
+          closeReasoning();
+          console.log(`  [调用: ${name}(${JSON.stringify(input)})]`);
+        },
+        onToolResult: (_toolCallId, name, output) => {
+          closeReasoning();
+          console.log(`  [结果: ${JSON.stringify(output)}]`);
+        },
+        onLoopDetected: (detection) => {
+          if ('message' in detection) {
+            console.warn(`  \x1b[33m${detection.message}\x1b[0m`);
+          }
+        },
+        onRetry: (attempt, error, delayMs) => {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.warn(`  \x1b[31m[API 异常重试] 第 ${attempt} 次重试，等待 ${delayMs}ms，错误: ${msg}\x1b[0m`);
+        },
+        onContinue: () => console.log("  → 模型还在工作，继续下一步..."),
+        onMaxSteps: () => console.log("\n[达到最大步数限制，强制停止]"),
+      });
+      closeReasoning();
+      if (printed) console.log();
+      process.stdout.write("\nYou: ");
+    }
+  } finally {
+    rl.close();
+  }
 }
 
 console.log('智能助手 Agent v0.3 (type "exit" to quit)\n');
-ask();
+void ask();

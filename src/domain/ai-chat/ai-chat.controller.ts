@@ -20,7 +20,7 @@ export class AiChatController {
   @ApiResponse({
     status: 200,
     description:
-      'SSE 流（text/event-stream），每行一个 data: {...} chunk：start → start-step → text-start/text-delta/text-end、tool-input-available/tool-output-available、data-step/data-loop-detected/data-retry/data-continue/data-max-steps → finish，最终以 data: [DONE] 结束。',
+      'SSE 流（text/event-stream），每行一个 data: {...} chunk：start → start-step → reasoning-start/reasoning-delta/reasoning-end（推理过程）、text-start/text-delta/text-end、tool-input-available/tool-output-available、data-step/data-loop-detected/data-retry/data-continue/data-max-steps → finish，最终以 data: [DONE] 结束。',
   })
   @ApiResponse({ status: 400, description: '请求参数校验失败（如 message 为空）' })
   async chat(@Body() dto: ChatRequestDto, @Res() res: Response): Promise<void> {

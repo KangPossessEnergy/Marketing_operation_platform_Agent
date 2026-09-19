@@ -18,6 +18,13 @@ function pickResponse(prompt: any[]): string {
   return RESPONSES.default;
 }
 
+function pickReasoning(prompt: any[]): string {
+  const userMsgs = (prompt || []).filter((m: any) => m.role === 'user');
+  const last = userMsgs[userMsgs.length - 1];
+  const text = (last?.content || []).map((c: any) => c.text || '').join('');
+  return `识别用户问题：${text}。本地 mock 模型不调用工具，直接生成回复。`;
+}
+
 const USAGE = {
   inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
   outputTokens: { total: 20, text: 20, reasoning: undefined },
@@ -57,10 +64,19 @@ export function createMockModel() {
     },
 
     async doStream({ prompt }: any) {
+      const reasoning = pickReasoning(prompt);
       const text = pickResponse(prompt);
       const id = 'text-1';
+      const reasoningId = 'reasoning-1';
 
       const chunks = [
+        { type: 'reasoning-start', id: reasoningId },
+        ...reasoning.split('').map((char: string) => ({
+          type: 'reasoning-delta',
+          id: reasoningId,
+          delta: char,
+        })),
+        { type: 'reasoning-end', id: reasoningId },
         { type: 'text-start', id },
         ...text.split('').map((char: string) => ({ type: 'text-delta', id, delta: char })),
         { type: 'text-end', id },

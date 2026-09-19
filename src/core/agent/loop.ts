@@ -8,12 +8,17 @@ import {
   type DetectionResult,
 } from './loop-detection';
 import { isRetryable, calculateDelay, sleep } from './retry';
+import {
+  ReasoningMarkerParser,
+  stripEncodedReasoning,
+} from './reasoning';
 
 const MAX_STEPS = 50;
 const MAX_RETRIES = 3;
 
 export interface AgentEvents {
   onStep?: (step: number) => void;
+  onReasoning?: (delta: string) => void;
   onText?: (delta: string) => void;
   onToolCall?: (toolCallId: string, toolName: string, input: unknown) => void;
   onToolResult?: (toolCallId: string, toolName: string, output: unknown) => void;
@@ -64,10 +69,19 @@ export async function agentLoop(
           // 不设 stopWhen，每次只跑一步
         });
 
+        const reasoningParser = new ReasoningMarkerParser(
+          delta => events.onReasoning?.(delta),
+          delta => events.onText?.(delta),
+        );
+
         for await (const part of result.fullStream) {
           switch (part.type) {
+            case 'reasoning-delta':
+              events.onReasoning?.(part.text);
+              break;
+
             case 'text-delta':
-              events.onText?.(part.text);
+              reasoningParser.push(part.text);
               break;
 
             case 'tool-call': {
@@ -97,6 +111,7 @@ export async function agentLoop(
             }
           }
         }
+        reasoningParser.flush();
 
         // 拿到这一步的完整结果
         stepMessages = await result.response;
@@ -116,7 +131,7 @@ export async function agentLoop(
 
     // 追加到消息历史
     if (stepMessages?.messages) {
-      messages.push(...stepMessages.messages);
+      messages.push(...stripEncodedReasoning(stepMessages.messages));
     }
 
     // 如果检测到严重卡死（熔断），强制停止循环
