@@ -12,152 +12,248 @@ import {
   ReasoningMarkerParser,
   stripEncodedReasoning,
 } from './reasoning';
+import { type AgentEvent, type AgentEventListener } from './types';
+import { MessageQueue } from './queue';
+import { DEFAULT_MAX_RETRIES, DEFAULT_MAX_STEPS } from './constant';
 
-const MAX_STEPS = 50;
-const MAX_RETRIES = 3;
 
-export interface AgentEvents {
-  onStep?: (step: number) => void;
-  onReasoning?: (delta: string) => void;
-  onText?: (delta: string) => void;
-  onToolCall?: (toolCallId: string, toolName: string, input: unknown) => void;
-  onToolResult?: (toolCallId: string, toolName: string, output: unknown) => void;
-  onContinue?: () => void;
-  onMaxSteps?: () => void;
-  onLoopDetected?: (detection: DetectionResult) => void;
-  onRetry?: (attempt: number, error: unknown, delayMs: number) => void;
-}
 
-export interface AgentLoopOptions {
-  resetLoopHistory?: boolean;
+export interface RunLoopOptions {
+  model: any;
+  registry: ToolRegistry;
+  messages: ModelMessage[];
+  system: string;
+  steeringQueue: MessageQueue<ModelMessage>;
+  followUpQueue: MessageQueue<ModelMessage>;
+  emit: AgentEventListener;
+  signal?: AbortSignal;
+  maxSteps?: number;
   maxRetries?: number;
+  resetLoopHistory?: boolean;
 }
 
-export async function agentLoop(
-  model: any,
-  registry: ToolRegistry,
-  messages: ModelMessage[],
-  system: string,
-  events: AgentEvents = {},
-  options: AgentLoopOptions = {},
-) {
-  if (options.resetLoopHistory !== false) {
+/**
+ * 核心 Agent 运行引擎 (双层 While + 双队列 + 事件驱动)
+ *
+ * - 外层循环：消费 followUpQueue，处理一轮完整的对话/任务交互 (Turn)
+ * - 内层循环：消费 steeringQueue 与执行工具链，驱动每一步的思考与行动决策 (Step)
+ */
+export async function runLoop(options: RunLoopOptions): Promise<void> {
+  const {
+    model,
+    registry,
+    messages,
+    system,
+    steeringQueue,
+    followUpQueue,
+    emit,
+    signal,
+    maxSteps = DEFAULT_MAX_STEPS,
+    maxRetries = DEFAULT_MAX_RETRIES,
+    resetLoopHistory = true,
+  } = options;
+
+  if (resetLoopHistory) {
     resetHistory();
   }
 
-  const maxRetries = options.maxRetries ?? MAX_RETRIES;
-  let step = 0;
+  // =========================================================================
+  // 外层循环：消费 followUpQueue，管理多轮交互生命周期 (Turn-level)
+  // =========================================================================
+  while (!signal?.aborted && !followUpQueue.isEmpty()) {
+    const nextFollowUp = await followUpQueue.popAsync();
+    if (!nextFollowUp) break;
+    console.log('kkdw-外层循环')
+    messages.push(nextFollowUp);
 
-  while (step < MAX_STEPS) {
-    step++;
-    events.onStep?.(step);
+    const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    emit({ type: 'turn:start', turnId });
 
-    let hasToolCall = false;
-    let criticalDetection: DetectionResult | null = null;
-    let warningDetections: DetectionResult[] = [];
-    let stepMessages: any = null;
+    let step = 0;
 
-    // API 容错：遇到可重试错误（网络抖动、限流 429、5xx 等）按指数退避 + 随机抖动重试
-    let attempt = 0;
-    while (true) {
-      try {
-        const result = streamText({
-          model,
-          system,
-          tools: registry.toAISDKFormat(),
-          messages,
-          // 不设 stopWhen，每次只跑一步
-        });
+    // =======================================================================
+    // 内层循环：消费 steeringQueue，驱动思考/工具决策闭环 (Step-level)
+    // =======================================================================
+    while (!signal?.aborted && step < maxSteps) {
+      step++;
+      emit({ type: 'step:start', step });
 
-        const reasoningParser = new ReasoningMarkerParser(
-          delta => events.onReasoning?.(delta),
-          delta => events.onText?.(delta),
-        );
+      // 1. 消费内层转向/纠偏指令（如用户中途打断、运行时系统矫正）
+      if (!steeringQueue.isEmpty()) {
+        const steeringItems = steeringQueue.drain();
+        messages.push(...steeringItems);
+      }
 
-        for await (const part of result.fullStream) {
-          switch (part.type) {
-            case 'reasoning-delta':
-              events.onReasoning?.(part.text);
-              break;
+          console.log('kkdw-内层循环')
+      let hasToolCall = false;
+      let criticalDetection: DetectionResult | null = null;
+      let warningDetections: DetectionResult[] = [];
+      let stepMessages: any = null;
 
-            case 'text-delta':
-              reasoningParser.push(part.text);
-              break;
+      // 2. 带指数退避重试的流式模型调用
+      let attempt = 0;
+      while (!signal?.aborted) {
+        try {
+          const result = streamText({
+            model,
+            system,
+            tools: registry.toAISDKFormat(),
+            messages,
+            abortSignal: signal,
+          });
 
-            case 'tool-call': {
-              hasToolCall = true;
-              events.onToolCall?.(part.toolCallId, part.toolName, part.input);
+          let reasoningActive = false;
+          let textActive = false;
 
-              // 循环检测：先检测当前调用是否陷入循环，再记录调用
-              const detection = detect(part.toolName, part.input);
-              recordCall(part.toolName, part.input);
-
-              if (detection.stuck) {
-                events.onLoopDetected?.(detection);
-                if (detection.level === 'critical') {
-                  criticalDetection = detection;
-                } else if (detection.level === 'warning') {
-                  warningDetections.push(detection);
-                }
-              }
-              break;
+          const closeReasoning = () => {
+            if (reasoningActive) {
+              emit({ type: 'reasoning:end' });
+              reasoningActive = false;
             }
+          };
 
-            case 'tool-result': {
-              events.onToolResult?.(part.toolCallId, part.toolName, part.output);
-              // 补录工具结果哈希，用于无进展熔断检测
-              recordResult(part.toolName, part.input, part.output);
-              break;
+          const closeText = () => {
+            if (textActive) {
+              emit({ type: 'text:end' });
+              textActive = false;
+            }
+          };
+
+          const reasoningParser = new ReasoningMarkerParser(
+            (delta) => {
+              closeText();
+              if (!reasoningActive) {
+                emit({ type: 'reasoning:start' });
+                reasoningActive = true;
+              }
+              emit({ type: 'reasoning:delta', delta });
+            },
+            (delta) => {
+              closeReasoning();
+              if (!textActive) {
+                emit({ type: 'text:start' });
+                textActive = true;
+              }
+              emit({ type: 'text:delta', delta });
+            },
+          );
+
+          for await (const part of result.fullStream) {
+            if (signal?.aborted) break;
+
+            switch (part.type) {
+              case 'reasoning-delta':
+                closeText();
+                if (!reasoningActive) {
+                  emit({ type: 'reasoning:start' });
+                  reasoningActive = true;
+                }
+                emit({ type: 'reasoning:delta', delta: part.text });
+                break;
+
+              case 'text-delta':
+                reasoningParser.push(part.text);
+                break;
+
+              case 'tool-call': {
+                closeReasoning();
+                closeText();
+                hasToolCall = true;
+                emit({
+                  type: 'tool:call',
+                  toolCallId: part.toolCallId,
+                  toolName: part.toolName,
+                  input: part.input,
+                });
+
+                // 死循环防范与熔断检测
+                const detection = detect(part.toolName, part.input);
+                recordCall(part.toolName, part.input);
+
+                if (detection.stuck) {
+                  emit({ type: 'loop:detected', detection });
+                  if (detection.level === 'critical') {
+                    criticalDetection = detection;
+                  } else if (detection.level === 'warning') {
+                    warningDetections.push(detection);
+                  }
+                }
+                break;
+              }
+
+              case 'tool-result': {
+                closeReasoning();
+                closeText();
+                emit({
+                  type: 'tool:result',
+                  toolCallId: part.toolCallId,
+                  toolName: part.toolName,
+                  output: part.output,
+                });
+                recordResult(part.toolName, part.input, part.output);
+                break;
+              }
             }
           }
-        }
-        reasoningParser.flush();
 
-        // 拿到这一步的完整结果
-        stepMessages = await result.response;
-        break; // 本步调用成功，跳出重试循环
-      } catch (error) {
-        attempt++;
-        if (isRetryable(error) && attempt <= maxRetries) {
-          const delayMs = calculateDelay(attempt);
-          events.onRetry?.(attempt, error, delayMs);
-          await sleep(delayMs);
-          continue;
+          reasoningParser.flush();
+          closeReasoning();
+          closeText();
+
+          stepMessages = await result.response;
+          break; // 本步成功
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          attempt++;
+          if (isRetryable(error) && attempt <= maxRetries) {
+            const delayMs = calculateDelay(attempt);
+            emit({ type: 'retry', attempt, error, delayMs });
+            await sleep(delayMs);
+            continue;
+          }
+          emit({ type: 'error', error });
+          throw error;
         }
-        // 不可重试或超过最大重试次数，向外抛出异常
-        throw error;
       }
+
+      // 3. 追加本步消息（清理思考标签）
+      if (stepMessages?.messages) {
+        messages.push(...stripEncodedReasoning(stepMessages.messages));
+      }
+
+      emit({ type: 'step:end', step });
+
+      // 4. 严重熔断，直接跳出内层循环
+      if (criticalDetection) {
+        break;
+      }
+
+      // 5. 循环警告自愈：将纠偏提示注入 steeringQueue 供下一步决策
+      if (warningDetections.length > 0) {
+        const warnMsg = warningDetections
+          .map((d) => ('message' in d ? d.message : ''))
+          .filter(Boolean)
+          .join('; ');
+        steeringQueue.push({
+          role: 'system',
+          content: `[系统检测提醒] ${warnMsg}。请停止重复相同的工具调用或无效参数，尝试换一种策略解决问题。`,
+        });
+      }
+
+      // 6. 内层循环退出判定：
+      // 模型没有要求调用工具，且 steeringQueue 中没有待处理纠偏指令
+      if (!hasToolCall && steeringQueue.isEmpty()) {
+        break;
+      }
+
+      emit({ type: 'continue' });
     }
 
-    // 追加到消息历史
-    if (stepMessages?.messages) {
-      messages.push(...stripEncodedReasoning(stepMessages.messages));
+    if (step >= maxSteps) {
+      emit({ type: 'max-steps', maxSteps });
     }
 
-    // 如果检测到严重卡死（熔断），强制停止循环
-    if (criticalDetection) {
-      break;
-    }
-
-    // 如果检测到警告，向对话历史注入系统提示引导模型换思路
-    if (warningDetections.length > 0) {
-      const warnMsg = warningDetections.map(d => ('message' in d ? d.message : '')).filter(Boolean).join('; ');
-      messages.push({
-        role: 'system',
-        content: `[系统检测提醒] ${warnMsg}。请停止重复相同的工具调用或无效参数，尝试换一种策略解决问题。`,
-      });
-    }
-
-    // 退出条件：模型没有调用任何工具，说明它认为可以直接回复了
-    if (!hasToolCall) {
-      break;
-    }
-
-    // 还有工具调用 → 继续循环，让模型看到工具结果后继续思考
-    events.onContinue?.();
-  }
-
-  if (step >= MAX_STEPS) {
-    events.onMaxSteps?.();
+    emit({ type: 'turn:end', turnId });
   }
 }
+

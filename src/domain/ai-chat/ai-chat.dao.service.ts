@@ -23,6 +23,11 @@ export class AiChatDaoService {
     return messages;
   }
 
+  public replaceMessages(sessionId: string = 'default', messages: ModelMessage[]): void {
+    this.sessions.set(sessionId, [...messages]);
+    this.trimHistory(sessionId);
+  }
+
   public clear(sessionId: string): boolean {
     return this.sessions.delete(sessionId);
   }
