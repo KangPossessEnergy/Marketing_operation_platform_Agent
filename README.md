@@ -1,6 +1,6 @@
 # Marketing_operation_platform_Agent
 
-营销运营平台的 AI 智能助手——一个基于 **NestJS + Vercel AI SDK** 的企业级全栈 Agent 系统（架构对齐 [vercel/ai examples/nest](https://github.com/vercel/ai/tree/main/examples/nest)），面向全域营销与电商运营业务场景，支持标准 UI Message Stream 流式输出、多步工具调用、循环检测与 API 容错重试。
+营销运营平台的 AI 智能助手——一个基于 **NestJS + Vercel AI SDK** 的企业级全栈 Agent 系统（架构对齐 [vercel/ai examples/nest](https://github.com/vercel/ai/tree/main/examples/nest)），面向全域营销与电商运营业务场景，支持标准 UI Message Stream 流式输出、深度思考过程流式分发、双层 While + 双缓冲队列驱动引擎、多步工具调用、死循环熔断检测与 API 容错重试。
 
 ---
 
@@ -8,12 +8,36 @@
 
 - **Web 框架**: NestJS 11（装饰器 + 依赖注入 + nest-cli 构建）
 - **AI 框架**: Vercel AI SDK（`ai` + `@ai-sdk/openai`），流式协议为 **UI Message Stream**（`createUIMessageStream` + `pipeUIMessageStreamToResponse`）
+- **执行引擎**: **双层 While 循环 + 双队列缓冲 (Steering & FollowUp) + 发布订阅 (Pub/Sub) 响应式 Agent 架构**
 - **参数校验**: class-validator / class-transformer（全局 ValidationPipe）
 - **架构设计**: Nest 特性模块 + 领域分层（core 引擎与业务模块解耦）
 - **运行时**: Node.js + nest-cli / tsx（CLI）
 - **包管理器**: pnpm (锁定版本，请勿使用 npm/yarn 安装依赖)
 
+---
 
+## 核心架构特性 (Agent Engine)
+
+### 1. 双层 While 循环与双队列缓冲机制
+参考先进的响应式 Agent 设计理念（如 Pi Agent / OpenCode），将传统的单向递归执行重构为**双层 While 循环 + 双端异步安全消息队列**：
+- **`steeringQueue`（内层决策控制队列 / 转向队列）**：
+  - 管理单轮决策执行（Turn）中的控制流与干涉；
+  - 自动承载**工具执行结果**、**死循环检测自愈提示**以及**用户实时打断指令（Human-in-the-loop / Steer）**；
+  - 内层循环在每一步决策（Step）前通过同步 `drain()` 取出全部积压的控制指令，动态纠偏模型。
+- **`followUpQueue`（外层任务队列 / 延续队列）**：
+  - 管理宏观轮次生命周期（Turn-level）；
+  - 自动承载多轮对话输入与自动化工作流后续任务；
+  - 外层循环在空闲（Idle）时异步挂起，新输入到达即刻唤醒开启下一轮交互。
+
+### 2. 发布订阅设计模式 (Pub/Sub)
+- 统一定义细粒度的 **`AgentEvent`**（`turn:start/end`, `step:start/end`, `reasoning:start/delta/end`, `text:delta`, `tool:call/result`, `loop:detected`, `retry` 等）；
+- 通过门面类 **`AgentSession`** 暴露 `subscribe()`、`prompt()`、`steer()`，实现执行引擎与外层渲染层（CLI 终端高亮、Web 端 SSE 流）的完全解耦。
+
+### 3. 深度思考过程（Reasoning）流式支持
+- **底层拦截归一化**：在 HTTP 出口处通过流式拦截器拦截中转网关的 `reasoning_content`，转换为标准化标记；
+- **增量流式解析**：在循环层借助有限状态机 `ReasoningMarkerParser` 分流思考过程与正文输出，避免标记泄露；
+- **历史清洗与防污染**：在对话持久化前自动清洗历史记录中的思考标记，防止污染后续 Prompt 上下文；
+- **多端呈现**：CLI 端实时渲染终端灰色高亮思考片段，Web 端无缝映射为标准 `reasoning-start` / `reasoning-delta` / `reasoning-end` UI Stream 事件。
 
 ---
 
@@ -52,21 +76,25 @@ CLI 启动后进入交互式对话，输入 `exit` 退出。
 
 ---
 
-## 架构设计 (NestJS 特性模块 + 领域分层)
+## 目录与模块架构
 
 ```text
 src/
 ├── main.ts                              # 【Nest 引导入口】NestFactory / CORS / ValidationPipe / 优雅停机
 ├── app.module.ts                        # 【根模块】聚合各特性模块
 ├── app.controller.ts                    # 【演示控制器】对齐 vercel/ai examples/nest：POST / 与 POST /stream-data
-├── cli.ts                               # 【CLI 终端交互单机调试入口】(pnpm dev)
+├── cli.ts                               # 【CLI 终端交互单机调试入口】通过 AgentSession 订阅流式事件
 │
 ├── core/                                # 【核心底层底座 - AI Agent Engine & Infrastructure】
-│   ├── agent/                           # Agent 执行引擎
-│   │   ├── loop.ts                      # ReAct 核心执行循环 (单步迭代驱动)
+│   ├── agent/                           # Agent 核心执行引擎
+│   │   ├── types.ts                     # AgentEvent 事件流规范与监听器定义
+│   │   ├── queue.ts                     # 异步双端安全消息队列 MessageQueue (drain / popAsync)
+│   │   ├── loop.ts                      # runLoop 核心执行引擎 (双层 While: Turn 外层 + Step 内层)
+│   │   ├── session.ts                   # AgentSession 对外门面 (双队列交互、生命周期、Pub/Sub)
+│   │   ├── reasoning.ts                 # 思考过程流式分发解析器与转码清洗
 │   │   ├── loop-detection.ts            # 循环/振荡/卡死检测 (SHA-256 参数及结果指纹)
 │   │   ├── retry.ts                     # API 容错与重试机制 (指数退避 + 随机 Jitter)
-│   │   └── runtime.ts                   # 运行时装配工厂 (模型加载与工具挂载，供 Nest provider 与 CLI 复用)
+│   │   └── runtime.ts                   # 运行时装配工厂 (模型加载、思考流拦截器与工具挂载)
 │   ├── context/                         # 系统提示词管道 (动静分界优化 KV Cache)
 │   │   ├── prompt-builder.ts            # 管道构建器 (PromptBuilder Pipe 模式)
 │   │   ├── index.ts                     # 提示词拼装主入口
@@ -86,7 +114,7 @@ src/
 │   │
 │   ├── ai-chat/                         # 【AI 对话领域】
 │   │   ├── ai-chat.controller.ts        # 路由入口：POST /api/chat（createUIMessageStream + pipeUIMessageStreamToResponse）
-│   │   ├── ai-chat.services.ts          # 业务逻辑：驱动 agentLoop，领域事件 → UI chunk 映射（导出 AGENT_RUNTIME）
+│   │   ├── ai-chat.services.ts          # 业务逻辑：通过 AgentSession 驱动核心流，映射为 UI Stream
 │   │   ├── ai-chat.dao.service.ts       # 数据访问层：多会话历史存储（内存 Map + 滑动窗口截断）
 │   │   ├── ai-chat.entity.ts            # 实体定义：ChatRequestDto / ChatDataParts / ChatUIMessage
 │   │   └── ai-chat.module.ts            # 模块定义：组装以上各部分（exports: AiChatService / AGENT_RUNTIME）
