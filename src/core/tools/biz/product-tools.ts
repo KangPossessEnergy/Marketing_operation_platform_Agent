@@ -1,4 +1,5 @@
-import type { ToolDefinition } from '../tool-registry';
+import { z } from 'zod';
+import { defineTool } from '../tool-registry';
 import { bizApi } from './biz-api';
 import {
   PRODUCT_CATALOG,
@@ -23,22 +24,17 @@ interface ProductMetricsResp {
   dailySales: Array<{ date: string; sales: number }>; // 近7天
 }
 
-export const queryProductDataTool: ToolDefinition = {
+export const queryProductDataTool = defineTool({
   name: 'query_product_data',
   description:
     '查询指定商品的经营数据（单价、销量、销售额、库存、毛利率、近7天销量趋势）',
-  parameters: {
-    type: 'object',
-    properties: {
-      keyword: { type: 'string', description: '商品名称或关键词，如 "气泡水"' },
-      days: { type: 'number', description: '统计最近多少天的销量，默认 30 天' },
-    },
-    required: ['keyword'],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    keyword: z.string().min(1).describe('商品名称或关键词，如 "气泡水"'),
+    days: z.number().int().positive().default(30).optional().describe('统计最近多少天的销量，默认 30 天'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
-  execute: async ({ keyword, days }: { keyword: string; days?: number }) => {
+  execute: async ({ keyword, days }) => {
     const name = (keyword ?? '').trim();
     if (!name) return '请提供要查询的商品名称或关键词';
 
@@ -67,24 +63,19 @@ export const queryProductDataTool: ToolDefinition = {
       return `查询商品经营数据失败：${err instanceof Error ? err.message : String(err)}`;
     }
   },
-};
+});
 
-export const queryProductListTool: ToolDefinition = {
+export const queryProductListTool = defineTool({
   name: 'query_product_list',
   description:
     '检索商品档案列表，可按关键词、类目、状态筛选，返回分页结果（编码、名称、类目、单价、库存、状态）。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      keyword: { type: 'string', description: '商品名称或编码关键词，可为空' },
-      category: { type: 'string', description: '类目筛选，如 "美妆个护"，可为空' },
-      status: { type: 'string', description: '状态筛选：在售 / 停售，可为空' },
-      page: { type: 'number', description: '页码，默认 1' },
-      pageSize: { type: 'number', description: '每页条数，默认 5' },
-    },
-    required: [],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    keyword: z.string().optional().describe('商品名称或编码关键词，可为空'),
+    category: z.string().optional().describe('类目筛选，如 "美妆个护"，可为空'),
+    status: z.enum(['在售', '停售']).optional().describe('状态筛选：在售 / 停售，可为空'),
+    page: z.number().int().positive().default(1).optional().describe('页码，默认 1'),
+    pageSize: z.number().int().positive().max(50).default(5).optional().describe('每页条数，默认 5'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /erp/products?keyword=&category=&status=&page=&pageSize=
@@ -95,12 +86,6 @@ export const queryProductListTool: ToolDefinition = {
     status,
     page = 1,
     pageSize = 5,
-  }: {
-    keyword?: string;
-    category?: string;
-    status?: string;
-    page?: number;
-    pageSize?: number;
   }) => {
     const kw = (keyword ?? '').trim();
     const cat = (category ?? '').trim();
@@ -135,4 +120,4 @@ export const queryProductListTool: ToolDefinition = {
 
     return { 总数: total, 页码: `${safePage}/${Math.ceil(total / pageSize)}`, 商品列表: list };
   },
-};
+})

@@ -1,4 +1,5 @@
-import type { ToolDefinition } from '../tool-registry';
+import { z } from 'zod';
+import { defineTool } from '../tool-registry';
 import {
   CUSTOMER_NAMES,
   SALES_STAFF,
@@ -46,23 +47,18 @@ const buildCustomerProfile = (name: string) => {
   };
 };
 
-export const queryCustomerTool: ToolDefinition = {
+export const queryCustomerTool = defineTool({
   name: 'query_customer',
   description:
     '查询客户档案：会员等级、标签、累计消费、客单价、最近购买时间、归属销售。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      keyword: { type: 'string', description: '客户名称或关键词，如 "杭州云创" 或 "张三"' },
-    },
-    required: ['keyword'],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    keyword: z.string().min(1).describe('客户名称或关键词，如 "杭州云创" 或 "张三"'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /crm/customers?keyword=
   // return bizApi.get('/crm/customers', { keyword });
-  execute: async ({ keyword }: { keyword: string }) => {
+  execute: async ({ keyword }) => {
     const kw = (keyword ?? '').trim();
     if (!kw) return '请提供要查询的客户名称或关键词';
 
@@ -75,29 +71,24 @@ export const queryCustomerTool: ToolDefinition = {
     }
     return buildCustomerProfile(matched[0] ?? kw);
   },
-};
+});
 
-export const queryCustomerRfmTool: ToolDefinition = {
+export const queryCustomerRfmTool = defineTool({
   name: 'query_customer_rfm',
   description:
     '查询客户 RFM 分层名单（高价值 / 流失预警 / 沉睡 / 一般），用于精细化运营。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      segment: {
-        type: 'string',
-        description: '分层筛选：高价值 / 流失预警 / 沉睡 / 一般，为空返回全部',
-      },
-      limit: { type: 'number', description: '返回条数，默认 10' },
-    },
-    required: [],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    segment: z
+      .enum(['高价值', '流失预警', '沉睡', '一般'])
+      .optional()
+      .describe('分层筛选：高价值 / 流失预警 / 沉睡 / 一般，为空返回全部'),
+    limit: z.number().int().positive().default(10).optional().describe('返回条数，默认 10'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /crm/customers/rfm?segment=&limit=
   // return bizApi.get('/crm/customers/rfm', { segment, limit });
-  execute: async ({ segment, limit = 10 }: { segment?: string; limit?: number }) => {
+  execute: async ({ segment, limit = 10 }) => {
     const seg = (segment ?? '').trim();
 
     let rows = CUSTOMER_NAMES.map((name) => {
@@ -130,26 +121,21 @@ export const queryCustomerRfmTool: ToolDefinition = {
       客户列表: rows.slice(0, Math.max(1, limit)).map(({ _spend, ...rest }) => rest),
     };
   },
-};
+});
 
-export const queryFollowRecordsTool: ToolDefinition = {
+export const queryFollowRecordsTool = defineTool({
   name: 'query_follow_records',
   description:
     '查询指定客户的跟进/沟通记录，按时间倒序返回。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      customer: { type: 'string', description: '客户名称，如 "杭州云创科技有限公司"' },
-      limit: { type: 'number', description: '返回条数，默认 5' },
-    },
-    required: ['customer'],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    customer: z.string().min(1).describe('客户名称，如 "杭州云创科技有限公司"'),
+    limit: z.number().int().positive().default(5).optional().describe('返回条数，默认 5'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /crm/customers/{customer}/follow-records?limit=
   // return bizApi.get(`/crm/customers/${encodeURIComponent(customer)}/follow-records`, { limit });
-  execute: async ({ customer, limit = 5 }: { customer: string; limit?: number }) => {
+  execute: async ({ customer, limit = 5 }) => {
     const name = (customer ?? '').trim();
     if (!name) return '请提供要查询的客户名称';
 
@@ -166,4 +152,4 @@ export const queryFollowRecordsTool: ToolDefinition = {
 
     return { 客户: name, 跟进记录: records };
   },
-};
+});

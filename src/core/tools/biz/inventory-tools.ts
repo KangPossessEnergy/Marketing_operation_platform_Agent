@@ -1,4 +1,5 @@
-import type { ToolDefinition } from '../tool-registry';
+import { z } from 'zod';
+import { defineTool } from '../tool-registry';
 import {
   PRODUCT_CATALOG,
   WAREHOUSES,
@@ -19,23 +20,18 @@ const buildWarehouseStock = (productName: string, warehouse: string) => {
   };
 };
 
-export const queryInventoryTool: ToolDefinition = {
+export const queryInventoryTool = defineTool({
   name: 'query_inventory',
   description:
     '查询指定商品的分仓库存明细（可用/锁定/在途/安全库存），并给出补货建议。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      keyword: { type: 'string', description: '商品名称或关键词，如 "气泡水"' },
-    },
-    required: ['keyword'],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    keyword: z.string().min(1).describe('商品名称或关键词，如 "气泡水"'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /erp/inventory?keyword=
   // return bizApi.get('/erp/inventory', { keyword });
-  execute: async ({ keyword }: { keyword: string }) => {
+  execute: async ({ keyword }) => {
     const kw = (keyword ?? '').trim();
     if (!kw) return '请提供要查询的商品名称或关键词';
 
@@ -63,29 +59,21 @@ export const queryInventoryTool: ToolDefinition = {
           : '库存充足，暂无补货需求',
     };
   },
-};
+});
 
-export const queryStockWarningTool: ToolDefinition = {
+export const queryStockWarningTool = defineTool({
   name: 'query_stock_warning',
   description:
     '查询库存预警名单：缺货（可用库存低于安全库存）或滞销（库存远超销量）商品。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      type: {
-        type: 'string',
-        description: '预警类型：缺货 / 滞销，为空返回全部',
-      },
-      limit: { type: 'number', description: '返回条数，默认 10' },
-    },
-    required: [],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    type: z.enum(['缺货', '滞销', '全部']).optional().describe('预警类型：缺货 / 滞销，为空返回全部'),
+    limit: z.number().int().positive().default(10).optional().describe('返回条数，默认 10'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /erp/inventory/warnings?type=&limit=
   // return bizApi.get('/erp/inventory/warnings', { type, limit });
-  execute: async ({ type, limit = 10 }: { type?: string; limit?: number }) => {
+  execute: async ({ type, limit = 10 }) => {
     const warningType = (type ?? '').trim();
 
     const rows = PRODUCT_CATALOG.map((product) => {
@@ -114,7 +102,7 @@ export const queryStockWarningTool: ToolDefinition = {
       };
     }).filter((r) => r.预警类型 !== null);
 
-    const filtered = warningType
+    const filtered = warningType && warningType !== '全部'
       ? rows.filter((r) => r.预警类型 === warningType)
       : rows;
 
@@ -127,4 +115,4 @@ export const queryStockWarningTool: ToolDefinition = {
       预警列表: filtered.slice(0, Math.max(1, limit)),
     };
   },
-};
+})

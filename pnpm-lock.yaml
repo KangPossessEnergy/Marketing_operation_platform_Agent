@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@ai-sdk/openai':
         specifier: ^4.0.70
-        version: 4.0.70(zod@4.5.4)
+        version: 4.0.70(zod@4.6.5)
       '@nestjs/common':
         specifier: ^12.0.3
         version: 12.0.3(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
@@ -25,7 +25,7 @@ importers:
         version: 12.0.1(@nestjs/common@12.0.3(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.0.3)(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)
       ai:
         specifier: ^7.0.106
-        version: 7.0.106(zod@4.5.4)
+        version: 7.0.106(zod@4.6.5)
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -44,6 +44,9 @@ importers:
       swagger-ui-express:
         specifier: ^5.0.1
         version: 5.0.1(express@5.2.1(supports-color@8.1.1))
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@nestjs/cli':
         specifier: ^12.0.3
@@ -593,9 +596,6 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
-
-  '@types/node@26.4.1':
-    resolution: {integrity: sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA==}
 
   '@types/node@26.6.1':
     resolution: {integrity: sha512-VqGJBMCtdhqkBUCcBLvywI0NJ+KLuVzgNnlBUNFOQjqVxzo2lxLUNg1DSey8+u2u6ktswSAxg+s68QLzWHNOuA==}
@@ -1612,9 +1612,6 @@ packages:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
     engines: {node: '>=18'}
 
-  undici-types@8.3.0:
-    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
-
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
@@ -1680,32 +1677,32 @@ packages:
     resolution: {integrity: sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==}
     engines: {node: '>=18'}
 
-  zod@4.5.4:
-    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
 
-  '@ai-sdk/gateway@4.0.86(zod@4.5.4)':
+  '@ai-sdk/gateway@4.0.86(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.17
-      '@ai-sdk/provider-utils': 5.0.44(zod@4.5.4)
+      '@ai-sdk/provider-utils': 5.0.44(zod@4.6.5)
       '@vercel/oidc': 3.2.0
-      zod: 4.5.4
+      zod: 4.6.5
 
-  '@ai-sdk/openai@4.0.70(zod@4.5.4)':
+  '@ai-sdk/openai@4.0.70(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.17
-      '@ai-sdk/provider-utils': 5.0.44(zod@4.5.4)
-      zod: 4.5.4
+      '@ai-sdk/provider-utils': 5.0.44(zod@4.6.5)
+      zod: 4.6.5
 
-  '@ai-sdk/provider-utils@5.0.44(zod@4.5.4)':
+  '@ai-sdk/provider-utils@5.0.44(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.17
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.1
-      zod: 4.5.4
+      zod: 4.6.5
 
   '@ai-sdk/provider@4.0.17':
     dependencies:
@@ -2153,11 +2150,6 @@ snapshots:
   '@types/json-schema@7.0.15':
     optional: true
 
-  '@types/node@26.4.1':
-    dependencies:
-      undici-types: 8.3.0
-    optional: true
-
   '@types/node@26.6.1':
     dependencies:
       undici-types: 8.9.0
@@ -2291,12 +2283,12 @@ snapshots:
   acorn@8.18.0:
     optional: true
 
-  ai@7.0.106(zod@4.5.4):
+  ai@7.0.106(zod@4.6.5):
     dependencies:
-      '@ai-sdk/gateway': 4.0.86(zod@4.5.4)
+      '@ai-sdk/gateway': 4.0.86(zod@4.6.5)
       '@ai-sdk/provider': 4.0.17
-      '@ai-sdk/provider-utils': 5.0.44(zod@4.5.4)
-      zod: 4.5.4
+      '@ai-sdk/provider-utils': 5.0.44(zod@4.6.5)
+      zod: 4.6.5
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
@@ -2802,7 +2794,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 26.4.1
+      '@types/node': 26.6.1
       merge-stream: 2.0.0
       supports-color: 8.1.1
     optional: true
@@ -3254,9 +3246,6 @@ snapshots:
 
   uint8array-extras@1.5.0: {}
 
-  undici-types@8.3.0:
-    optional: true
-
   undici-types@8.9.0: {}
 
   undici@7.29.1: {}
@@ -3340,4 +3329,4 @@ snapshots:
 
   yoctocolors@2.2.0: {}
 
-  zod@4.5.4: {}
+  zod@4.6.5: {}

@@ -23,7 +23,8 @@
     "dotenv": "^18.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.3",

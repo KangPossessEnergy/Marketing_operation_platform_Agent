@@ -1,4 +1,5 @@
-import type { ToolDefinition } from '../tool-registry';
+import { z } from 'zod';
+import { defineTool } from '../tool-registry';
 import {
   CUSTOMER_NAMES,
   PRODUCT_CATALOG,
@@ -10,7 +11,7 @@ import {
   round2,
 } from './mock-utils';
 
-const ORDER_STATUSES = ['待付款', '已付款', '已发货', '已完成', '已取消', '退款中'];
+const ORDER_STATUSES = ['待付款', '已付款', '已发货', '已完成', '已取消', '退款中'] as const;
 const CHANNELS = ['天猫旗舰店', '京东自营', '抖音小店', '微信小程序', '线下门店'];
 const LOGISTICS = ['顺丰速运', '中通快递', '圆通速递', '京东物流'];
 const PAY_METHODS = ['微信支付', '支付宝', '银行卡', '货到付款'];
@@ -53,24 +54,19 @@ const buildOrder = (orderNo: string) => {
   return { customer, items, totalAmount, status, channel: pick(rng, CHANNELS), createdAt };
 };
 
-export const queryOrdersTool: ToolDefinition = {
+export const queryOrdersTool = defineTool({
   name: 'query_orders',
   description:
     '查询订单列表，可按状态、关键词（订单号/客户/商品）筛选，返回分页结果。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      keyword: { type: 'string', description: '订单号、客户名或商品名关键词，可为空' },
-      status: {
-        type: 'string',
-        description: '订单状态筛选：待付款 / 已付款 / 已发货 / 已完成 / 已取消 / 退款中，可为空',
-      },
-      page: { type: 'number', description: '页码，默认 1' },
-      pageSize: { type: 'number', description: '每页条数，默认 5' },
-    },
-    required: [],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    keyword: z.string().optional().describe('订单号、客户名或商品名关键词，可为空'),
+    status: z
+      .enum(ORDER_STATUSES)
+      .optional()
+      .describe('订单状态筛选：待付款 / 已付款 / 已发货 / 已完成 / 已取消 / 退款中，可为空'),
+    page: z.number().int().positive().default(1).optional().describe('页码，默认 1'),
+    pageSize: z.number().int().positive().max(50).default(5).optional().describe('每页条数，默认 5'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /erp/orders?keyword=&status=&page=&pageSize=
@@ -80,11 +76,6 @@ export const queryOrdersTool: ToolDefinition = {
     status,
     page = 1,
     pageSize = 5,
-  }: {
-    keyword?: string;
-    status?: string;
-    page?: number;
-    pageSize?: number;
   }) => {
     const kw = (keyword ?? '').trim();
     const st = (status ?? '').trim();
@@ -128,25 +119,20 @@ export const queryOrdersTool: ToolDefinition = {
       订单列表: list,
     };
   },
-};
+});
 
-export const queryOrderDetailTool: ToolDefinition = {
+export const queryOrderDetailTool = defineTool({
   name: 'query_order_detail',
   description:
     '根据订单号查询订单详情：商品明细、金额、收货信息、物流与支付状态。当前为内置模拟数据，供演示使用',
-  parameters: {
-    type: 'object',
-    properties: {
-      orderNo: { type: 'string', description: '订单号，如 "SO202609105731"' },
-    },
-    required: ['orderNo'],
-    additionalProperties: false,
-  },
+  parameters: z.object({
+    orderNo: z.string().min(1).describe('订单号，如 "SO202609105731"'),
+  }),
   isConcurrencySafe: true,
   isReadOnly: true,
   // TODO 真实接口: GET /erp/orders/{orderNo}
   // return bizApi.get(`/erp/orders/${encodeURIComponent(orderNo)}`);
-  execute: async ({ orderNo }: { orderNo: string }) => {
+  execute: async ({ orderNo }) => {
     const no = (orderNo ?? '').trim().toUpperCase();
     if (!/^SO\d{12}$/.test(no)) {
       return `订单号格式不正确: ${orderNo}。订单号格式为 SO + 8位日期 + 4位序号，可先用 query_orders 查询`;
@@ -182,4 +168,4 @@ export const queryOrderDetailTool: ToolDefinition = {
         : '未发货',
     };
   },
-};
+});
