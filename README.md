@@ -9,7 +9,9 @@
 - **Web 框架**: NestJS 11（装饰器 + 依赖注入 + nest-cli 构建）
 - **AI 框架**: Vercel AI SDK（`ai` + `@ai-sdk/openai`），流式协议为 **UI Message Stream**（`createUIMessageStream` + `pipeUIMessageStreamToResponse`）
 - **执行引擎**: **双层 While 循环 + 双队列缓冲 (Steering & FollowUp) + 发布订阅 (Pub/Sub) 响应式 Agent 架构**
-- **参数校验**: class-validator / class-transformer（全局 ValidationPipe）
+- **参数校验**:
+  - HTTP 接口层：`class-validator` + `class-transformer`（全局 NestJS `ValidationPipe`）
+  - Tool 工具层：**`Zod` 强类型 Schema + 运行时自愈拦截**（`defineTool` 自动推导入参，入参错误自动反馈给 LLM 纠正）
 - **架构设计**: Nest 特性模块 + 领域分层（core 引擎与业务模块解耦）
 - **运行时**: Node.js + nest-cli / tsx（CLI）
 - **包管理器**: pnpm (锁定版本，请勿使用 npm/yarn 安装依赖)
