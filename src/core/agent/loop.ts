@@ -63,7 +63,7 @@ export async function runLoop(options: RunLoopOptions): Promise<void> {
   while (!signal?.aborted && !followUpQueue.isEmpty()) {
     const nextFollowUp = await followUpQueue.popAsync();
     if (!nextFollowUp) break;
-    console.log('kkdw-外层循环')
+    // console.log('kkdw-外层循环')
     messages.push(nextFollowUp);
 
     const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -84,7 +84,7 @@ export async function runLoop(options: RunLoopOptions): Promise<void> {
         messages.push(...steeringItems);
       }
 
-          console.log('kkdw-内层循环')
+          // console.log('kkdw-内层循环')
       let hasToolCall = false;
       let criticalDetection: DetectionResult | null = null;
       let warningDetections: DetectionResult[] = [];

@@ -4,9 +4,20 @@ import { AgentSession } from "./core/agent/session";
 import { createAgentRuntime } from "./core/agent/runtime";
 import { buildSystemPrompt } from "./core/context";
 
+import { BizTool } from "./core/tools/biz";
+import { customMcpTools, githubMcpTools } from "./core/tools/mcp";
+
 const { model, registry } = createAgentRuntime();
 const system = buildSystemPrompt();
-console.log(`已注册 ${registry.getAll().length} 个工具：`);
+
+const totalCount = registry.getAll().length;
+const bizCount = BizTool.length;
+const customMcpCount = customMcpTools.length;
+const githubMcpCount = githubMcpTools.length;
+
+console.log(
+  `\x1b[36m已注册工具总数: ${totalCount} 个 (自定义业务工具: ${bizCount} 个, 自定义MCP工具: ${customMcpCount} 个, GitHub MCP工具: ${githubMcpCount} 个)\x1b[0m\n`
+);
 
 const rl = createInterface({
   input: process.stdin,

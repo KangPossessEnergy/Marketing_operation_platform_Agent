@@ -2,10 +2,21 @@ import 'dotenv/config';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { defineTool, ToolDefinition } from '../../tool-registry';
 
 const server = new McpServer({
   name: 'agent-os',
   version: '1.0.0',
+});
+
+const scheduleManageSchema = z.object({
+  action: z
+    .enum(['create', 'cancel', 'update', 'list'])
+    .describe('操作类型：create(创建), cancel(取消), update(更新), list(查看列表)'),
+  title: z.string().min(1).describe('任务标题，例如 "每周一客户回访提醒"'),
+  cron: z.string().optional().describe('Cron 定时表达式，例如 "0 9 * * 1"（每周一早9点）'),
+  targetId: z.string().optional().describe('目标任务ID（在 cancel 或 update 时必填）'),
+  extraInfo: z.record(z.string(), z.unknown()).optional().describe('附加参数信息'),
 });
 
 async function callScheduleManage(input: unknown): Promise<{
@@ -75,19 +86,24 @@ async function callScheduleManage(input: unknown): Promise<{
   };
 }
 
-// 注册 schedule_manage 工具
+/**
+ * 供 Agent 运行时调用的 schedule_manage MCP 工具定义
+ */
+export const scheduleManageTool = defineTool({
+  name: 'mcp__custom__schedule_manage',
+  description: '[MCP:custom] 管理营销定时任务与提醒（创建、取消、更新定时巡检或跟进任务）',
+  parameters: scheduleManageSchema,
+  execute: async (args) => {
+    const result = await callScheduleManage(args);
+    return result.content.map((c) => c.text).join('\n');
+  },
+});
+
+// 注册 MCP Server 端工具
 server.tool(
   'schedule_manage',
   '管理营销定时任务与提醒（创建、取消、更新定时巡检或跟进任务）',
-  {
-    action: z
-      .enum(['create', 'cancel', 'update', 'list'])
-      .describe('操作类型：create(创建), cancel(取消), update(更新), list(查看列表)'),
-    title: z.string().min(1).describe('任务标题，例如 "每周一客户回访提醒"'),
-    cron: z.string().optional().describe('Cron 定时表达式，例如 "0 9 * * 1"（每周一早9点）'),
-    targetId: z.string().optional().describe('目标任务ID（在 cancel 或 update 时必填）'),
-    extraInfo: z.record(z.string(), z.unknown()).optional().describe('附加参数信息'),
-  },
+  scheduleManageSchema.shape,
   async (args) => {
     return await callScheduleManage(args);
   },
@@ -98,7 +114,20 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch((err) => {
-  console.error('MCP Server 运行异常:', err);
-  process.exit(1);
-});
+// 仅在直接作为独立脚本执行时启动 stdio server
+if (process.argv[1]?.endsWith('define-mcp-tools.ts') || process.argv[1]?.endsWith('define-mcp-tools.js')) {
+  main().catch((err) => {
+    console.error('MCP Server 运行异常:', err);
+    process.exit(1);
+  });
+}
+
+
+
+
+/**
+ * 自定义的本地 MCP 工具集（如通过 McpServer 独立定义并接入的工具）
+ */
+export const customMcpTools: ToolDefinition[] = [
+  scheduleManageTool,
+];
