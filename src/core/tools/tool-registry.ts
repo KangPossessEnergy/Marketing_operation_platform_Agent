@@ -15,6 +15,9 @@ export interface ToolDefinition<TParams extends ToolParameters = ToolParameters>
   isReadOnly?: boolean;
   maxResultChars?: number;
   execute: (input: InferToolInput<TParams>) => Promise<unknown>;
+  profile?: string[];
+  shouldDefer?: boolean;
+  searchHint?: string;
 }
 
 export function isZodSchema(schema: unknown): schema is z.ZodTypeAny {
