@@ -14,6 +14,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.70",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server-github": "^2025.4.8",
     "@nestjs/common": "^12.0.3",
     "@nestjs/core": "^12.0.3",
     "@nestjs/platform-express": "^12.0.3",
