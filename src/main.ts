@@ -27,6 +27,7 @@ async function bootstrap() {
   await app.listen(port); //启动HTTP服务器，开始监听指定端口的请求
 
   console.log(`营销运营平台 AI 助手 (NestJS) 已启动: http://localhost:${port}`);
+  console.log(`  - 接口文档: GET  http://localhost:${port}/docs (Swagger UI)`);
   console.log(`  - 健康检查: GET  http://localhost:${port}/api/health`);
   console.log(
     `  - 对话接口: POST http://localhost:${port}/api/chat (UI Message Stream / SSE)`,

@@ -12,6 +12,10 @@
 - **参数校验**:
   - HTTP 接口层：`class-validator` + `class-transformer`（全局 NestJS `ValidationPipe`）
   - Tool 工具层：**`Zod` 强类型 Schema + 运行时自愈拦截**（`defineTool` 自动推导入参，入参错误自动反馈给 LLM 纠正）
+- **工具生态体系**:
+  - **自定义业务工具 (Biz Tools)**: 商品/订单/库存预警/客户RFM分析等
+  - **自定义 MCP 工具 (Custom MCP Tools)**: 基于 `@modelcontextprotocol/sdk` 实现的营销定时巡检与提醒调度 (`mcp__custom__schedule_manage`)
+  - **GitHub MCP 工具 (GitHub MCP Tools)**: 远程仓库 Issues / 文件内容查询等 (`mcp__github__*`)
 - **架构设计**: Nest 特性模块 + 领域分层（core 引擎与业务模块解耦）
 - **运行时**: Node.js + nest-cli / tsx（CLI）
 - **包管理器**: pnpm (锁定版本，请勿使用 npm/yarn 安装依赖)
@@ -75,6 +79,20 @@ pnpm build
 CLI 启动后进入交互式对话，输入 `exit` 退出。
 
 > 💡 未配置 `API_KEY` 时会自动切换到内置的 mock 模型，方便本地无鉴权调试 Agent 流程。
+
+---
+
+## 接口文档与 Swagger UI
+
+启动 HTTP 服务 (`pnpm start:dev`) 后，内置的 Swagger UI 会自动挂载在 `/docs` 路径下：
+
+- **Swagger UI 访问地址**: [http://localhost:3001/docs](http://localhost:3001/docs)
+- **支持的接口列表**:
+
+| 模块 / Tag | 请求方法 | 接口路径 | 说明 | 输入 / 输出类型 |
+| :--- | :--- | :--- | :--- | :--- |
+| **AI 对话** | `POST` | `/api/chat` | 驱动 ReAct Agent 多步推理与工具调用，以 **UI Message Stream**（SSE）实时下发思考过程、文本流与工具事件 | `application/json` (ChatRequestDto) → `text/event-stream` |
+| **健康检查** | `GET` | `/api/health` | 查询系统运行状态、启动运行时长 (Uptime) 及当前已注册的 Agent 工具总数 | 响应 `HealthResponseDto` (JSON) |
 
 ---
 
