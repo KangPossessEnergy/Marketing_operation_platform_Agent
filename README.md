@@ -98,34 +98,48 @@ CLI 启动后进入交互式对话，输入 `exit` 退出。
 
 ## 架构定位与职责边界 (Architecture Philosophy)
 
-在微服务体系下，本项目定位于 **AI 智能中枢与 ReAct 运行时引擎 (Intelligent Runtime & Gateway)**，坚持**轻量、弱状态、高内聚**的设计哲学：
+在营销运营平台的**微服务架构体系**下，本项目作为独立的 **AI Agent 微服务 (AI Intelligent Agent Microservice)** 运行，与**业务后端微服务 (Business Backend Service)**、**前端客户端 (Frontend Web/H5)** 协同组成完整的营销运营中台，坚持**关注点分离、轻量无状态、业务解耦**的设计哲学：
 
 ```text
-       [前端 / Web Client]
-               │
-               ▼  (HTTP / SSE 流式交互)
-┌─────────────────────────────────────────────────────────────┐
-│       Agent 服务 (本项目：Marketing_operation_platform_Agent)  │
-│                                                             │
-│  ┌───────────────────────┐        ┌──────────────────────┐  │
-│  │ 核心引擎 core/agent/  │        │ 工具集成 core/tools/ │  │
-│  │ - 双层 While 循环      │ ─────► │ - 内置文件/Shell     │  │
-│  │ - 双队列 (Steer/Follow)│        │ - 业务接口工具 (Tool) │  │
-│  │ - 思考流解析 & 熔断    │        │ - MCP 协议扩展       │  │
-│  └───────────────────────┘        └──────────┬───────────┘  │
-└──────────────────────────────────────────────┼──────────────┘
-                                               │
-                         Tool 工具调用 (HTTP / │ RPC)
-                                               ▼
-                              ┌─────────────────────────────────┐
-                              │          业务后端服务           │
-                              │ - 用户鉴权、营销实体 CRUD、任务调度  │
-                              │ - 数据库治理 (Prisma / MySQL)   │
-                              └─────────────────────────────────┘
+                           ┌────────────────────────┐
+                           │   前端客户端 (Web/H5)   │
+                           └───────────┬────────────┘
+                                       │
+                    ┌──────────────────┴──────────────────┐
+                    │ (HTTP / SSE 流式对话)               │ (业务 CRUD / 页面操作)
+                    ▼                                     ▼
+┌──────────────────────────────────────┐     ┌──────────────────────────────────────┐
+│  AI Agent 微服务 (本项目)            │     │  业务后端微服务 (NestJS/Java/Go 等)  │
+│  Marketing_operation_platform_Agent  │     │  Marketing Business Backend Service  │
+│                                      │     │                                      │
+│ ┌──────────────────────────────────┐ │     │ ┌──────────────────────────────────┐ │
+│ │ Agent 决策与执行引擎              │ │     │ │ 营销业务中心 (Campaign Core)     │ │
+│ │ - 双层 While 循环 & 双队列缓冲   │ │     │ │ - 活动配置、权益发放、用户鉴权   │ │
+│ │ - 深度思考流分发 & 循环熔断      │ │     │ ├──────────────────────────────────┤ │
+│ ├──────────────────────────────────┤ │     │ │ 客户与画像中心 (CRM & RFM)       │ │
+│ │ 工具调用与协议适配层             │ │     │ │ - 客户标签、RFM 分群、跟进记录   │ │
+│ │ - 自定义业务工具 (BizTool)       │ │     │ ├──────────────────────────────────┤ │
+│ │ - 本地/通用 MCP (Custom MCP)     │ │     │ │ 交易与履约中心 (Order & Product) │ │
+│ │ - 外部生态 MCP (GitHub MCP 等)   │ │     │ │ - 订单明细、库存告警、商品大盘   │ │
+│ └─────────────────┬────────────────┘ │     │ └──────────────────┬───────────────┘ │
+└───────────────────┼──────────────────┘     └────────────────────┼─────────────────┘
+                    │                                             │
+                    │         微服务间 RPC / HTTP API 交互        │ (ORM / SQL)
+                    └────────────────────────────────────────────►│
+                                                                  ▼
+                                                     ┌────────────────────────┐
+                                                     │ 业务数据库 (MySQL/PG)  │
+                                                     └────────────────────────┘
 ```
 
-- **Agent 服务职责**：聚焦大模型交互、Prompt 动态装配、ReAct 双层循环调度、工具调用决策与事件流的分发（不直接耦合主业务数据库，无需引入重型 ORM 如 Prisma）。
-- **业务后端服务职责**：负责领域业务数据持久化、复杂事务、实体管理与常规 CRUD。Agent 仅通过封装为 Tool 的 HTTP/RPC/MCP 接口与后端交互，保持数据自治与关注点分离。
+### 微服务分工与职责划分
+
+| 服务角色 | 核心职责 | 数据与状态管理 | 典型技术栈 |
+| :--- | :--- | :--- | :--- |
+| **AI Agent 微服务**<br>*(本项目)* | 1. 大模型 Prompt 动态组装与上下文治理<br>2. ReAct 双层循环自主决策与工具调度<br>3. 流式分发 Reasoning 深度思考与 UI Message Stream<br>4. 循环调用拦截、API 错误容错重试 | **弱状态 / 内存会话队列**<br>不直连业务主库，不引入重型 ORM，保障高并发下的调度轻量与弹性伸缩 | NestJS 11 + Vercel AI SDK + Zod + MCP SDK |
+| **业务后端微服务**<br>*(下游微服务)* | 1. 营销实体（商品、订单、客户、活动）的增删改查<br>2. 核心业务规则校验、分布式事务与权限认证<br>3. 数据库持久化与数据大盘统计<br>4. 对外暴露高内聚的 RESTful / RPC 业务接口 | **强状态 / 领域数据库**<br>负责数据的持久化治理、事务一致性与缓存管理 | 微服务框架 + ORM (Prisma / TypeORM / MyBatis) + MySQL / Redis |
+
+- **无缝集成原则**：Agent 服务仅通过封装好的 **Tool（HTTP/RPC 客户端）** 或 **MCP 协议** 与业务微服务交互，业务微服务无需感知 Agent 内部复杂的提示词工程与推理机制，实现双方独立演进与灰度部署。
 
 ---
 
@@ -133,14 +147,20 @@ CLI 启动后进入交互式对话，输入 `exit` 退出。
 
 ```text
 src/
-├── main.ts                              # 【Nest 引导入口】NestFactory / CORS / ValidationPipe / 优雅停机
-├── app.module.ts                        # 【根模块】聚合各特性模块
-├── app.controller.ts                    # 【演示控制器】对齐 vercel/ai examples/nest：POST / 与 POST /stream-data
-├── cli.ts                               # 【CLI 终端交互单机调试入口】通过 AgentSession 订阅流式事件
+├── main.ts                              # 【Nest 引导入口】NestFactory / CORS / ValidationPipe / Swagger 挂载 / 优雅停机
+├── app.module.ts                        # 【根模块】聚合 DomainModule、AppController、AppService
+├── app.controller.ts                    # 【基础控制器】健康心跳与基础路由
+├── app.service.ts                       # 【基础服务】基础业务逻辑
+├── cli.ts                               # 【CLI 终端交互单机调试入口】工具数量统计、通过 AgentSession 订阅流式事件
+├── utils/                               # 【通用工具】流式适配转发 (relayCompatFetch) 等
+├── shared/                              # 【共享模块】公共常量与共享类型定义
+├── lib/                                 # 【公共库扩展】
+├── database/                            # 【数据库/持久化相关定义】
 │
 ├── core/                                # 【核心底层底座 - AI Agent Engine & Infrastructure】
 │   ├── agent/                           # Agent 核心执行引擎
 │   │   ├── types.ts                     # AgentEvent 事件流规范与监听器定义
+│   │   ├── constant.ts                  # 核心常量定义 (最大步数、超时时间等)
 │   │   ├── queue.ts                     # 异步双端安全消息队列 MessageQueue (drain / popAsync)
 │   │   ├── loop.ts                      # runLoop 核心执行引擎 (双层 While: Turn 外层 + Step 内层)
 │   │   ├── session.ts                   # AgentSession 对外门面 (双队列交互、生命周期、Pub/Sub)
@@ -151,32 +171,48 @@ src/
 │   ├── context/                         # 系统提示词管道 (动静分界优化 KV Cache)
 │   │   ├── prompt-builder.ts            # 管道构建器 (PromptBuilder Pipe 模式)
 │   │   ├── index.ts                     # 提示词拼装主入口
-│   │   └── modules/                     # 提示词子模块 (identity, capabilities, principles 等)
-│   ├── tools/                           # 工具注册中心与工具集
-│   │   ├── index.ts                     # 工具统一导出入口
-│   │   ├── tool-registry.ts             # 工具注册表 (自动转换 AI SDK Schema，长输出截断)
-│   │   ├── common/                      # 基础内置工具（文件、搜索、Shell 等）
-│   │   └── mcp/                         # Model Context Protocol (MCP) 扩展目录
+│   │   └── modules/                     # 提示词子模块 (identity, capabilities, principles, style, boundary, environment)
+│   ├── tools/                           # 工具注册中心与工具生态体系
+│   │   ├── index.ts                     # 工具统一导出入口 (allTools = BizTool + McpTool)
+│   │   ├── tool-registry.ts             # 工具注册表 (Zod Schema 校验拦截、自动转换 AI SDK 工具格式、长输出截断)
+│   │   ├── biz/                         # 【自定义业务工具集】
+│   │   │   ├── index.ts                 # 业务工具聚合导出 (BizTool)
+│   │   │   ├── biz-api.ts               # 下游业务 API 封装
+│   │   │   ├── customer-tools.ts        # 客户画像与 RFM 分析工具
+│   │   │   ├── order-tools.ts           # 订单列表与明细查询工具
+│   │   │   ├── product-tools.ts         # 商品数据与列表查询工具
+│   │   │   ├── inventory-tools.ts       # 库存管理与缺货预警工具
+│   │   │   └── mock-utils.ts            # 业务数据 Mock 工具
+│   │   └── mcp/                         # 【Model Context Protocol (MCP) 扩展目录】
+│   │       ├── index.ts                 # MCP 聚合导出 (customMcpTools + githubMcpTools)
+│   │       ├── define_mcp_tools/        # 自定义 MCP 工具 (schedule_manage 营销定时巡检与提醒)
+│   │       │   └── define-mcp-tools.ts
+│   │       └── github_mcp_tools/        # GitHub MCP 工具 (list_issues / get_file_contents)
+│   │           └── github-mcp-tools.ts
 │   └── mock/
 │       └── mock-model.ts                # 本地模拟大模型 Provider
 │
-├── swagger/                             # 【API 文档】swagger.ts / swagger.config.ts（UI 挂载在 /docs）
-├── domain/                              # 【对外接口与领域分发】
-│   ├── index.ts                         # 领域说明文档
-│   ├── domain.module.ts                 # 领域聚合模块
-│   │
-│   ├── ai-chat/                         # 【AI 交互服务领域】
-│   │   ├── ai-chat.controller.ts        # 路由入口：POST /api/chat（标准 UI Message Stream / SSE）
-│   │   ├── ai-chat.services.ts          # 业务逻辑：通过 AgentSession 驱动核心流，映射为 UI Stream
-│   │   ├── ai-chat.dao.service.ts       # 运行时状态暂存（内存 Map / 滑动窗口历史上下文截断）
-│   │   ├── ai-chat.entity.ts            # 实体定义：ChatRequestDto / ChatDataParts / ChatUIMessage
-│   │   └── ai-chat.module.ts            # 模块组装（exports: AiChatService / AGENT_RUNTIME）
-│   │
-│   └── health/                          # 【系统监控领域】
-│       ├── health.controller.ts         # 路由入口：GET /api/health
-│       ├── health.services.ts           # 逻辑实现：汇总服务状态/运行耗时/已注册工具数
-│       ├── health.entity.ts             # 实体定义：HealthResponseDto
-│       └── health.module.ts             # 模块组装
+├── swagger/                             # 【API 文档与 Swagger UI】
+│   ├── swagger.ts                       # Swagger 实例构建与挂载 (/docs)
+│   ├── swagger.config.ts                # 文档元信息与 Tag 配置
+│   └── swagger.interface.ts             # Swagger 配置接口类型定义
+│
+└── domain/                              # 【对外接口与领域分发】
+    ├── index.ts                         # 领域说明文档
+    ├── domain.module.ts                 # 领域聚合模块
+    │
+    ├── ai-chat/                         # 【AI 交互服务领域】
+    │   ├── ai-chat.controller.ts        # 路由入口：POST /api/chat（标准 UI Message Stream / SSE）
+    │   ├── ai-chat.services.ts          # 业务逻辑：通过 AgentSession 驱动核心流，映射为 UI Stream
+    │   ├── ai-chat.dao.service.ts       # 运行时状态暂存（内存 Map / 滑动窗口历史上下文截断）
+    │   ├── ai-chat.entity.ts            # 实体定义：ChatRequestDto / ChatDataParts / ChatUIMessage
+    │   └── ai-chat.module.ts            # 模块组装（exports: AiChatService / AGENT_RUNTIME）
+    │
+    └── health/                          # 【系统监控领域】
+        ├── health.controller.ts         # 路由入口：GET /api/health
+        ├── health.services.ts           # 逻辑实现：汇总服务状态/运行耗时/已注册工具数
+        ├── health.entity.ts             # 实体定义：HealthResponseDto
+        └── health.module.ts             # 模块组装
 ```
 
 ---
